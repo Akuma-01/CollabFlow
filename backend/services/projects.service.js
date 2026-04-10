@@ -26,7 +26,21 @@ const getProjectMember = async (project_id, user_id) => {
 
 const getAllProjects = async (userId) => {
 	const result = await pool.query(
-		"SELECT p.id, p.title, COUNT(DISTINCT pm.user_id) AS member_count, COUNT(DISTINCT t.id) AS task_count FROM projects p LEFT JOIN project_members pm ON pm.project_id = p.id LEFT JOIN tasks t ON t.project_id = p.id WHERE p.owner_id = $1 GROUP BY p.id, p.title ORDER BY p.id;", [userId]);
+		`SELECT 
+			p.id, 
+			p.title, 
+			COUNT(DISTINCT pm.user_id) AS member_count, 
+			COUNT(DISTINCT t.id) AS task_count 
+		FROM projects p 
+		LEFT JOIN project_members pm ON pm.project_id = p.id 
+		LEFT JOIN tasks t ON t.project_id = p.id  
+		WHERE p.owner_id = $1 
+			OR EXISTS (
+				SELECT 1 FROM project_members 
+				WHERE project_id = p.id AND user_id = $1
+			)
+		GROUP BY p.id, p.title 
+		ORDER BY p.id;`, [userId]);
 
 	return result.rows;
 }

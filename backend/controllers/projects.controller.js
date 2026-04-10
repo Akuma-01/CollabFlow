@@ -69,13 +69,23 @@ const createProjectMember = async (req, res, next) => {
 }
 
 const getProjectDetails = async (req, res, next) => {
-	const project_id = Number(req.params.projectId);
-	if (isNaN(project_id)) {
-		return next({ status: 400, message: "Valid project ID is required" });
+	try {
+		const project_id = Number(req.params.id);
+		if (isNaN(project_id)) {
+			return next({ status: 400, message: "Valid project ID is required" });
+		}
+
+		const details = await projectService.getProjectDetails(project_id);
+
+		res.status(200).json({
+			success: true,
+			data: details
+		})
+	} catch (err) {
+		next(err);
 	}
-
-
 }
+
 
 const getProjectMembers = async (req, res, next) => {
 	const project_id = Number(req.params.id);
