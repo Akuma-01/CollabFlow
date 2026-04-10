@@ -1,8 +1,8 @@
-const { getProjectById, isUserMember } = require("../services/projects.service")
+import { NextFunction, Request, Response } from 'express';
+import { getProjectById, isUserMember } from '../services/projects.service';
 
-const isProjectOwner = async (req, res, next) => {
+export const isProjectOwner = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-
 		const projectId = Number(req.params.id);
 
 		if (isNaN(projectId)) {
@@ -27,7 +27,7 @@ const isProjectOwner = async (req, res, next) => {
 
 }
 
-const isProjectMember = async (req, res, next) => {
+export const isProjectMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const projectId = Number(req.params.id);
 
@@ -52,8 +52,4 @@ const isProjectMember = async (req, res, next) => {
 	} catch (err) {
 		next(err);
 	}
-}
-
-module.exports = {
-	isProjectMember, isProjectOwner
 }

@@ -1,7 +1,9 @@
-const { getProjectMember, getProjectById } = require("../services/projects.service")
+import { NextFunction, Request, Response } from 'express';
+import { getProjectById, getProjectMember } from '../services/projects.service';
+import { ProjectRole } from '../types';
 
-const hasRole = (allowedRoles) => {
-	return async (req, res, next) => {
+const hasRole = (allowedRoles: ProjectRole[]) => {
+	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		try {
 			const user_id = Number(req.user.id);
 			const project_id = Number(req.params.projectId || req.params.id);
@@ -30,5 +32,4 @@ const hasRole = (allowedRoles) => {
 	}
 }
 
-module.exports = hasRole
-
+export default hasRole;

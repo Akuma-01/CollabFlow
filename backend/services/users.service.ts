@@ -1,13 +1,11 @@
-const pool = require('../config/db');
+import pool from '../config/db';
+import { User } from '../types';
 
-const getAllUsers = async () => {
-	const result = await pool.query("SELECT * FROM users ORDER BY id ASC");
+export const getAllUsers = async (): Promise<User[]> => {
+	const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
 	return result.rows;
-}
-
-module.exports = {
-	getAllUsers,
 };
+
 /*	WITHOUT USING DB
 
 	let users = [];

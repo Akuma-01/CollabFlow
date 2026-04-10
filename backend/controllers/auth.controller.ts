@@ -1,6 +1,7 @@
-const authService = require("../services/auth.service")
+import { NextFunction, Request, Response } from 'express';
+import * as authService from '../services/auth.service';
 
-const registerUser = async (req, res, next) => {
+export const registerUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const { name, email, password } = req.body;
 
 	if (!name || typeof name !== 'string') {
@@ -16,17 +17,13 @@ const registerUser = async (req, res, next) => {
 	try {
 		const result = await authService.registerUser(name, email, password);
 
-		return res.status(201).json({
-			success: true,
-			data: result
-		})
+		res.status(201).json({ success: true, data: result })
 	} catch (err) {
-
 		next(err);
 	}
 }
 
-const loginUser = async (req, res, next) => {
+export const loginUser = async (req: Request, res: Response, next: NextFunction) => {
 	const { email, password } = req.body;
 
 	if (!email || !email.includes('@') || typeof email !== "string") {
@@ -40,17 +37,10 @@ const loginUser = async (req, res, next) => {
 	try {
 		const result = await authService.loginUser(email, password);
 
-		return res.status(200).json({
-			success: true,
-			data: result
-		})
+		res.status(200).json({ success: true, data: result })
 
 	} catch (err) {
 		next(err);
 	}
 
-}
-
-module.exports = {
-	registerUser, loginUser
 }

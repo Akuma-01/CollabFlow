@@ -1,6 +1,7 @@
-const jwt = require("jsonwebtoken");
+import { NextFunction, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
 	try {
 		const authHeader = req.headers.authorization;
 
@@ -18,7 +19,10 @@ const authMiddleware = (req, res, next) => {
 		const token = parts[1];
 
 		// verufy token
-		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+			id: number;
+			email: string;
+		};
 
 		// attach decoded user to req.user
 		req.user = decoded;
@@ -29,4 +33,4 @@ const authMiddleware = (req, res, next) => {
 	}
 }
 
-module.exports = authMiddleware;
+export default authMiddleware;
