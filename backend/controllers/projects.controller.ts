@@ -1,19 +1,17 @@
-const projectService = require("../services/projects.service")
+import { NextFunction, Request, Response } from 'express';
+import * as projectService from '../services/projects.service';
+import { ProjectRole } from '../types';
 
-const getProjects = async (req, res, next) => {
+export const getProjects = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const result = await projectService.getAllProjects(req.user.id);
-
-		res.status(200).json({
-			success: true,
-			data: result,
-		});
+		res.status(200).json({ success: true, data: result });
 	} catch (err) {
 		next(err);
 	}
-}
+};
 
-const createProject = async (req, res, next) => {
+export const createProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const { title } = req.body;
 
 	if (!title || typeof title != "string") {
@@ -34,7 +32,7 @@ const createProject = async (req, res, next) => {
 	}
 };
 
-const createProjectMember = async (req, res, next) => {
+export const createProjectMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const project_id = Number(req.params.id);
 	const { user_id, role } = req.body;
 
@@ -57,18 +55,24 @@ const createProjectMember = async (req, res, next) => {
 	}
 
 	try {
-		const newProjectMember = await projectService.createProjectMember({ project_id, user_id: userId, role });
+		const newProjectMember = await projectService.createProjectMember({
+			project_id,
+			user_id: userId,
+			role: role as ProjectRole
+		});
 
-		return res.status(200).json({
+		res.status(200).json({
 			success: true,
 			data: newProjectMember
 		})
+		return;
+
 	} catch (err) {
 		next(err);
 	}
 }
 
-const getProjectDetails = async (req, res, next) => {
+export const getProjectDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const project_id = Number(req.params.id);
 		if (isNaN(project_id)) {
@@ -87,7 +91,7 @@ const getProjectDetails = async (req, res, next) => {
 }
 
 
-const getProjectMembers = async (req, res, next) => {
+export const getProjectMembers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const project_id = Number(req.params.id);
 	if (isNaN(project_id)) {
 		return next({ status: 400, message: "Valid project ID is required" });
@@ -106,7 +110,7 @@ const getProjectMembers = async (req, res, next) => {
 
 }
 
-const deleteProject = async (req, res, next) => {
+export const deleteProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const project_id = Number(req.params.id);
 
@@ -129,12 +133,3 @@ const deleteProject = async (req, res, next) => {
 		return next(err);
 	}
 }
-
-module.exports = {
-	createProject,
-	getProjects,
-	getProjectDetails,
-	createProjectMember,
-	getProjectMembers,
-	deleteProject
-};

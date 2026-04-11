@@ -1,16 +1,17 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middlewares/auth.middleware");
-const hasRole = require("../middlewares/hasRole.middleware");
+import { Router } from 'express';
+import authMiddleware from '../middlewares/auth.middleware';
+import hasRole from '../middlewares/hasRole.middleware';
 
-const {
+const router = Router();
+
+import {
 	createProject,
-	getProjects,
 	createProjectMember,
-	getProjectMembers,
+	deleteProject,
 	getProjectDetails,
-	deleteProject
-} = require("../controllers/projects.controller")
+	getProjectMembers,
+	getProjects
+} from "../controllers/projects.controller";
 
 // Get all projects (only user's projects)
 router.get('/', authMiddleware, getProjects);
@@ -25,4 +26,4 @@ router.get('/:id', authMiddleware, hasRole(["viewer", "editor", "owner"]), getPr
 
 router.delete('/:id', authMiddleware, hasRole(["owner"]), deleteProject);
 
-module.exports = router
+export default router;

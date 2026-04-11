@@ -1,6 +1,9 @@
-const tasksService = require("../services/tasks.service")
+import { NextFunction, Request, Response } from 'express';
+import * as tasksService from '../services/tasks.service';
+import { TaskStatus } from '../types';
 
-const createTask = async (req, res, next) => {
+
+export const createTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const { title, description } = req.body
 		if (!title || typeof title !== "string") {
@@ -24,11 +27,11 @@ const createTask = async (req, res, next) => {
 	}
 }
 
-const getProjectTasks = async (req, res, next) => {
+export const getProjectTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const { assigned_to, status } = req.query;
 		const assignedTo = assigned_to ? Number(assigned_to) : null;
-		const taskStatus = status || null;
+		const taskStatus = (status as TaskStatus) || null;
 
 		const project_id = Number(req.params.id);
 		if (isNaN(project_id)) {
@@ -47,7 +50,7 @@ const getProjectTasks = async (req, res, next) => {
 	}
 }
 
-const assignTask = async (req, res, next) => {
+export const assignTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const task_id = Number(req.params.id);
 	if (isNaN(task_id)) {
 		return next({ status: 400, message: "Valid task ID is required" });
@@ -77,7 +80,7 @@ const assignTask = async (req, res, next) => {
 
 }
 
-const updateTaskStatus = async (req, res, next) => {
+export const updateTaskStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const task_id = Number(req.params.id);
 	if (isNaN(task_id)) {
 		return next({ status: 400, message: "Valid task ID is required" });
@@ -94,7 +97,7 @@ const updateTaskStatus = async (req, res, next) => {
 	}
 
 	try {
-		const result = await tasksService.updateTaskStatus(task_id, status);
+		const result = await tasksService.updateTaskStatus(task_id, status as TaskStatus);
 
 		res.status(200).json({
 			success: true,
@@ -105,9 +108,3 @@ const updateTaskStatus = async (req, res, next) => {
 	}
 }
 
-module.exports = {
-	createTask,
-	getProjectTasks,
-	assignTask,
-	updateTaskStatus
-}

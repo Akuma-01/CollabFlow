@@ -1,7 +1,8 @@
-const userService = require("../services/users.service");
+import { NextFunction, Request, Response } from 'express';
+import * as userService from '../services/users.service';
 
 // GET
-const getUsers = async (req, res, next) => {
+export const getUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const users = await userService.getAllUsers();
 

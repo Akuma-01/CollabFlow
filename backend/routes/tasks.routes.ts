@@ -1,13 +1,15 @@
-const express = require("express")
-const router = express.Router();
-const hasRole = require("../middlewares/hasRole.middleware");
-const authMiddleware = require("../middlewares/auth.middleware")
+import { Router } from 'express';
+import authMiddleware from '../middlewares/auth.middleware';
+import hasRole from '../middlewares/hasRole.middleware';
 
-const {
+const router = Router();
+
+import {
+	assignTask,
 	createTask,
 	getProjectTasks,
-	assignTask,
-	updateTaskStatus } = require("../controllers/tasks.controller")
+	updateTaskStatus
+} from "../controllers/tasks.controller";
 
 router.get("/:id/tasks", authMiddleware, hasRole(["owner", "viewer", "editor"]), getProjectTasks);
 
@@ -17,4 +19,4 @@ router.patch("/:projectId/tasks/:id/assign", authMiddleware, hasRole(["owner", "
 
 router.patch("/:projectId/tasks/:id/status", authMiddleware, hasRole(["owner", "editor"]), updateTaskStatus);
 
-module.exports = router
+export default router;
