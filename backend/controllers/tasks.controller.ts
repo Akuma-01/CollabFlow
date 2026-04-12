@@ -10,7 +10,7 @@ export const createTask = async (req: Request, res: Response, next: NextFunction
 			return next({ status: 400, message: "Valid title is required" })
 		}
 
-		const project_id = Number(req.params.id);
+		const project_id = Number(req.params.projectId);
 		if (isNaN(project_id)) {
 			return next({ status: 400, message: "Valid project ID is required" })
 		}
@@ -33,7 +33,7 @@ export const getProjectTasks = async (req: Request, res: Response, next: NextFun
 		const assignedTo = assigned_to ? Number(assigned_to) : null;
 		const taskStatus = (status as TaskStatus) || null;
 
-		const project_id = Number(req.params.id);
+		const project_id = Number(req.params.projectId);
 		if (isNaN(project_id)) {
 			return next({ status: 400, message: "Valid project ID is required" })
 		}

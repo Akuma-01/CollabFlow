@@ -6,7 +6,7 @@ const hasRole = (allowedRoles: ProjectRole[]) => {
 	return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 		try {
 			const user_id = Number(req.user.id);
-			const project_id = Number(req.params.projectId || req.params.id);
+			const project_id = Number(req.params.projectId);
 			const project = await getProjectById(project_id);
 			if (!project) {
 				return next({ status: 404, message: "Project not found" })

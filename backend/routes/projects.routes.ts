@@ -18,12 +18,12 @@ router.get('/', authMiddleware, getProjects);
 
 router.post('/', authMiddleware, createProject);
 
-router.post('/:id/members', authMiddleware, hasRole(["owner"]), createProjectMember);
+router.post('/:projectId/members', authMiddleware, hasRole(["owner"]), createProjectMember);
 
-router.get('/:id/members', authMiddleware, hasRole(["viewer", "editor", "owner"]), getProjectMembers);
+router.get('/:projectId/members', authMiddleware, hasRole(["viewer", "editor", "owner"]), getProjectMembers);
 
-router.get('/:id', authMiddleware, hasRole(["viewer", "editor", "owner"]), getProjectDetails);
+router.get('/:projectId', authMiddleware, hasRole(["viewer", "editor", "owner"]), getProjectDetails);
 
-router.delete('/:id', authMiddleware, hasRole(["owner"]), deleteProject);
+router.delete('/:projectId', authMiddleware, hasRole(["owner"]), deleteProject);
 
 export default router;

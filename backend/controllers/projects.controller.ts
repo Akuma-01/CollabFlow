@@ -33,7 +33,7 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
 };
 
 export const createProjectMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-	const project_id = Number(req.params.id);
+	const project_id = Number(req.params.projectId);
 	const { user_id, role } = req.body;
 
 	if (isNaN(project_id)) {
@@ -74,7 +74,7 @@ export const createProjectMember = async (req: Request, res: Response, next: Nex
 
 export const getProjectDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const project_id = Number(req.params.id);
+		const project_id = Number(req.params.projectId);
 		if (isNaN(project_id)) {
 			return next({ status: 400, message: "Valid project ID is required" });
 		}
@@ -92,7 +92,7 @@ export const getProjectDetails = async (req: Request, res: Response, next: NextF
 
 
 export const getProjectMembers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-	const project_id = Number(req.params.id);
+	const project_id = Number(req.params.projectId);
 	if (isNaN(project_id)) {
 		return next({ status: 400, message: "Valid project ID is required" });
 	}
@@ -112,7 +112,7 @@ export const getProjectMembers = async (req: Request, res: Response, next: NextF
 
 export const deleteProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const project_id = Number(req.params.id);
+		const project_id = Number(req.params.projectId);
 
 		if (isNaN(project_id)) {
 			return next({ status: 400, message: "Valid project ID is required" });

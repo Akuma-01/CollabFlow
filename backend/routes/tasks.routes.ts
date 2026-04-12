@@ -11,9 +11,9 @@ import {
 	updateTaskStatus
 } from "../controllers/tasks.controller";
 
-router.get("/:id/tasks", authMiddleware, hasRole(["owner", "viewer", "editor"]), getProjectTasks);
+router.get("/:projectId/tasks", authMiddleware, hasRole(["owner", "viewer", "editor"]), getProjectTasks);
 
-router.post("/:id/tasks", authMiddleware, hasRole(["owner", "editor"]), createTask);
+router.post("/:projectId/tasks", authMiddleware, hasRole(["owner", "editor"]), createTask);
 
 router.patch("/:projectId/tasks/:id/assign", authMiddleware, hasRole(["owner", "editor"]), assignTask);
 
