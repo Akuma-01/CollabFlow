@@ -10,7 +10,8 @@ import {
 	deleteProject,
 	getProjectDetails,
 	getProjectMembers,
-	getProjects
+	getProjects,
+	updateProject
 } from "../controllers/projects.controller";
 
 // Get all projects (only user's projects)
@@ -25,5 +26,7 @@ router.get('/:projectId/members', authMiddleware, hasRole(["viewer", "editor", "
 router.get('/:projectId', authMiddleware, hasRole(["viewer", "editor", "owner"]), getProjectDetails);
 
 router.delete('/:projectId', authMiddleware, hasRole(["owner"]), deleteProject);
+
+router.patch('/:projectId', authMiddleware, hasRole(["owner"]), updateProject);
 
 export default router;

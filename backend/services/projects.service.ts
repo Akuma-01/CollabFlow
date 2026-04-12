@@ -100,3 +100,15 @@ export const deleteProject = async (project_id: number): Promise<Project | undef
 
 	return result.rows[0];
 }
+
+export const updateProject = async (project_id: number, title: string): Promise<Project | undefined> => {
+	const result = await pool.query(
+		`UPDATE projects
+		SET title = $1
+		WHERE id = $2 
+		RETURNING *`,
+		[title, project_id]
+	);
+
+	return result.rows[0];
+}

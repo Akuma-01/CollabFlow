@@ -133,3 +133,32 @@ export const deleteProject = async (req: Request, res: Response, next: NextFunct
 		return next(err);
 	}
 }
+
+export const updateProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	const { title } = req.body;
+	if (!title) {
+		next({ status: 400, message: "No updation data was sent" });
+		return;
+	}
+
+	const project_id = Number(req.params.projectId);
+	if (isNaN(project_id)) {
+		next({ status: 400, message: "Invalid project ID" });
+		return;
+	}
+	try {
+		const data = await projectService.updateProject(project_id, title);
+		if (!data) {
+			return next({ status: 404, message: "Project not found" });
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Project name updated successfully",
+			data: data
+		});
+	} catch (err) {
+		next(err);
+	}
+
+}
