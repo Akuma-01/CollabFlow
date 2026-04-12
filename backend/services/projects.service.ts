@@ -1,3 +1,4 @@
+import { error } from 'console';
 import pool from '../config/db';
 import { Project, ProjectMember, ProjectRole } from '../types';
 
@@ -11,18 +12,6 @@ export const isProjectOwner = async (project_id: number, user_id: number): Promi
 	const project = await getProjectById(project_id);
 
 	return !!project && project.owner_id === user_id;
-}
-
-export const isUserMember = async (project_id: number, user_id: number): Promise<boolean> => {
-	const result = await pool.query("SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", [project_id, user_id]);
-
-	return result.rows.length > 0;
-}
-
-export const getProjectMember = async (project_id: number, user_id: number): Promise<ProjectMember | undefined> => {
-	const result = await pool.query("SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", [project_id, user_id]);
-
-	return result.rows[0];
 }
 
 export const getAllProjects = async (userId: number): Promise<Project[]> => {
@@ -72,6 +61,26 @@ export const createProject = async (title: string, owner_id: number): Promise<Pr
 	return result.rows[0];
 };
 
+export const deleteProject = async (project_id: number): Promise<Project | undefined> => {
+	const result = await pool.query("DELETE FROM projects WHERE id =$1  RETURNING *", [project_id]);
+
+	return result.rows[0];
+}
+
+export const updateProject = async (project_id: number, title: string): Promise<Project | undefined> => {
+	const result = await pool.query(
+		`UPDATE projects
+		SET title = $1
+		WHERE id = $2 
+		RETURNING *`,
+		[title, project_id]
+	);
+
+	return result.rows[0];
+}
+
+
+// MEMBERS
 export const createProjectMember = async (data: {
 	project_id: number;
 	user_id: number;
@@ -95,20 +104,36 @@ export const getProjectMembers = async (
 	return result.rows;
 };
 
-export const deleteProject = async (project_id: number): Promise<Project | undefined> => {
-	const result = await pool.query("DELETE FROM projects WHERE id =$1  RETURNING *", [project_id]);
+export const isUserMember = async (project_id: number, user_id: number): Promise<boolean> => {
+	const result = await pool.query("SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", [project_id, user_id]);
+
+	return result.rows.length > 0;
+}
+
+export const getProjectMember = async (project_id: number, user_id: number): Promise<ProjectMember | undefined> => {
+	const result = await pool.query("SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", [project_id, user_id]);
 
 	return result.rows[0];
 }
 
-export const updateProject = async (project_id: number, title: string): Promise<Project | undefined> => {
-	const result = await pool.query(
-		`UPDATE projects
-		SET title = $1
-		WHERE id = $2 
-		RETURNING *`,
-		[title, project_id]
-	);
+export const removeMember = async (project_id: number, user_id: number): Promise<ProjectMember | undefined> => {
+	const isOwner = await isProjectOwner(project_id, user_id);
+	if (isOwner) {
+		throw { status: 403, message: "Cannot modify owner" };
+	}
+
+	const result = await pool.query('DELETE FROM project_members WHERE project_id = $1 AND user_id = $2 RETURNING *', [project_id, user_id]);
+
+	return result.rows[0];
+}
+
+export const updateMemberRole = async (project_id: number, user_id: number, role: ProjectRole): Promise<ProjectMember | undefined> => {
+	const isOwner = await isProjectOwner(project_id, user_id);
+	if (isOwner) {
+		throw { status: 403, message: "Cannot modify owner" };
+	}
+
+	const result = await pool.query('UPDATE project_members SET role = $1 WHERE project_id=$2 AND user_id=$3 RETURNING *', [role, project_id, user_id]);
 
 	return result.rows[0];
 }
