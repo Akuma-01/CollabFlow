@@ -108,3 +108,52 @@ export const updateTaskStatus = async (req: Request, res: Response, next: NextFu
 	}
 }
 
+
+export const updateTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	const task_id = Number(req.params.id);
+	if (isNaN(task_id)) {
+		return next({ status: 400, message: "Valid task ID is required" });
+	}
+
+	const project_id = Number(req.params.projectId);
+	if (isNaN(project_id)) {
+		return next({ status: 400, message: "Valid project ID is required" });
+	}
+
+	const { title, description } = req.body;
+	if (title && typeof (title) !== "string") {
+		return next({ status: 400, message: "Valid title is required" });
+	}
+
+	if (description && typeof (description) !== "string") {
+		return next({ status: 400, message: "Valid description is required" });
+	}
+
+	try {
+		const updatedTask = await tasksService.updateTask(task_id, project_id, title, description);
+
+		res.status(200).json({ success: true, data: updatedTask });
+	} catch (err) {
+		next(err);
+	}
+}
+
+export const deleteTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	const task_id = Number(req.params.id);
+	if (isNaN(task_id)) {
+		return next({ status: 400, message: "Valid task ID is required" });
+	}
+
+	const project_id = Number(req.params.projectId);
+	if (isNaN(project_id)) {
+		return next({ status: 400, message: "Valid project ID is required" });
+	}
+
+	try {
+		const deletedTask = await tasksService.deleteTask(task_id, project_id);
+
+		res.status(200).json({ success: true, message: "Task successfully deleted" })
+	} catch (err) {
+		next(err);
+	}
+}

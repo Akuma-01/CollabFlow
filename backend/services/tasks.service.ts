@@ -1,3 +1,5 @@
+import { error } from 'console';
+import { isDataView } from 'util/types';
 import pool from '../config/db';
 import { Task, TaskStatus } from '../types';
 import { isProjectOwner, isUserMember } from './projects.service';
@@ -76,3 +78,38 @@ export const updateTaskStatus = async (task_id: number, status: TaskStatus): Pro
 	);
 	return result.rows[0];
 };
+
+export const updateTask = async (task_id: number, project_id: number, title?: string, description?: string): Promise<Task | undefined> => {
+	const fields: string[] = [];
+	const values: any[] = [];
+	let index = 1;
+
+	if (title) {
+		fields.push(`title = $${index++}`);
+		values.push(title);
+	}
+	if (description) {
+		fields.push(`description = $${index++}`);
+		values.push(description);
+	}
+	if (fields.length === 0) {
+		throw { status: 400, message: "No update data provided" };
+	}
+
+	values.push(task_id, project_id);
+
+	const result = await pool.query(
+		`UPDATE tasks SET ${fields.join(', ')} WHERE id = $${index++} AND project_id = $${index} RETURNING *`, values
+	);
+
+	return result.rows[0];
+}
+
+export const deleteTask = async (task_id: number, project_id: number): Promise<Task | undefined> => {
+	const result = await pool.query("DELETE FROM tasks WHERE id = $1 AND project_id = $2 RETURNING *", [task_id, project_id]);
+
+	if (result.rowCount === 0) {
+		throw { status: 404, message: "Task not found" }
+	}
+	return result.rows[0];
+}
