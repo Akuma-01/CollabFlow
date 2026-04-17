@@ -13,7 +13,7 @@ import {
 	updateTaskStatus
 } from "../controllers/tasks.controller";
 
-router.get("/:projectId/tasks", authMiddleware, hasRole(["owner", "viewer", "editor"]), getProjectTasks);
+router.get("/:projectId/tasks", authMiddleware, hasRole(["owner", "viewer", "editor", "guide"]), getProjectTasks);
 
 router.post("/:projectId/tasks", authMiddleware, hasRole(["owner", "editor"]), createTask);
 

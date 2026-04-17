@@ -8,11 +8,12 @@ export const createTask = async (
 	title: string,
 	description: string | undefined,
 	project_id: number,
-	created_by: number
+	created_by: number,
+	deadline?: string,
 ): Promise<Task> => {
 	const result = await pool.query(
-		'INSERT INTO tasks (title, description, project_id, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
-		[title, description, project_id, created_by]
+		'INSERT INTO tasks (title, description, project_id, created_by, deadline) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+		[title, description, project_id, created_by, deadline || null]
 	);
 	return result.rows[0];
 };
@@ -79,7 +80,7 @@ export const updateTaskStatus = async (task_id: number, status: TaskStatus): Pro
 	return result.rows[0];
 };
 
-export const updateTask = async (task_id: number, project_id: number, title?: string, description?: string): Promise<Task | undefined> => {
+export const updateTask = async (task_id: number, project_id: number, title?: string, description?: string, deadline?: string): Promise<Task | undefined> => {
 	const fields: string[] = [];
 	const values: any[] = [];
 	let index = 1;
@@ -91,6 +92,10 @@ export const updateTask = async (task_id: number, project_id: number, title?: st
 	if (description) {
 		fields.push(`description = $${index++}`);
 		values.push(description);
+	}
+	if (deadline !== undefined) {
+		fields.push(`deadline = $${index++}`);
+		values.push(deadline);
 	}
 	if (fields.length === 0) {
 		throw { status: 400, message: "No update data provided" };
@@ -112,4 +117,24 @@ export const deleteTask = async (task_id: number, project_id: number): Promise<T
 		throw { status: 404, message: "Task not found" }
 	}
 	return result.rows[0];
+}
+
+export const getAssignedTasks = async (user_id: number) => {
+	const result = await pool.query(`
+			SELECT 
+				t.id,
+				t.title,
+				t.description,
+				t.status,
+				t.deadline,
+				t.project_id,
+				p.title AS project_title
+			FROM tasks t
+			JOIN projects p ON p.id = t.project_id
+			WHERE t.assigned_to = $1
+			ORDER BY t.deadline ASC NULLS LAST
+		`, [user_id]
+	);
+
+	return result.rows;
 }

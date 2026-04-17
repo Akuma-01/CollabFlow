@@ -25,9 +25,10 @@ export interface Task {
 	created_by: number;
 	assigned_to?: number;
 	status: TaskStatus;
+	deadline?: string;
 }
 
-export type ProjectRole = "owner" | "editor" | "viewer";
+export type ProjectRole = "owner" | "editor" | "viewer" | "guide";
 export type TaskStatus = "todo" | "in_progress" | "done";
 
 export interface AppError {

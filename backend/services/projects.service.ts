@@ -137,3 +137,49 @@ export const updateMemberRole = async (project_id: number, user_id: number, role
 
 	return result.rows[0];
 }
+
+// GUIDE
+export const addGuide = async (project_id: number, user_id: number): Promise<void> => {
+	const existing = await pool.query(
+		'SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2',
+		[project_id, user_id]
+	);
+	if (existing.rows.length > 0) {
+		throw { status: 400, message: "User is already a member of this project" };
+	}
+
+	const result = await pool.query(
+		'INSERT INTO project_members (user_id, project_id, role) VALUES ($1, $2, $3)',
+		[user_id, project_id, 'guide']
+	);
+
+	return result.rows[0];
+};
+
+export const getUserDashboard = async (user_id: number) => {
+	const result = await pool.query(`
+		SELECT 
+			p.id,
+			p.title,
+			p.owner_id,
+			pm_viewer.role AS my_role,
+			COUNT (DISTINCT pm.user_id) AS member_count,
+			COUNT (DISTINCT t.id) AS task_count,
+			COUNT (DISTINCT CASE WHEN t.status = 'todo' THEN t.id END) AS todo_count,
+			COUNT (DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END) AS in_progress_count,
+			COUNT (DISTINCT CASE WHEN t.status = 'done' THEN t.id END) AS done_count
+		FROM project p
+		LEFT JOIN project_members pm ON pm.user_id = p.id
+		LEFT JOIN project_members pm_viewer ON pm_viewer.project_id = p.id AND pm_viewer.user_id = $1
+		LEFT JOIN tasks t ON t.project_id = p.id
+		WHERE p.owner_id = $1 
+			OR EXISTS (
+				SELECT 1 FROM project_members
+				WHERE project_id = p.id AND user_id = $1
+			)
+		GROUP BY p.id, p.title, p.owner_id, pm_viewer.role
+		ORDER BY p.id ASC
+	`, [user_id]);
+
+	return result.rows;
+}

@@ -5,7 +5,7 @@ import { TaskStatus } from '../types';
 
 export const createTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const { title, description } = req.body
+		const { title, description, deadline } = req.body
 		if (!title || typeof title !== "string") {
 			return next({ status: 400, message: "Valid title is required" })
 		}
@@ -15,7 +15,7 @@ export const createTask = async (req: Request, res: Response, next: NextFunction
 			return next({ status: 400, message: "Valid project ID is required" })
 		}
 
-		const result = await tasksService.createTask(title, description, project_id, req.user.id);
+		const result = await tasksService.createTask(title, description, project_id, req.user.id, deadline);
 
 		res.status(201).json({
 			success: true,

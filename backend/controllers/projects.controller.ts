@@ -219,3 +219,26 @@ export const updateMemberRole = async (req: Request, res: Response, next: NextFu
 		next(err);
 	}
 }
+
+// GUIDE
+
+export const addGuide = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+	const project_id = Number(req.params.projectId);
+	if (isNaN(project_id)) {
+		return next({ status: 400, message: "Valid project ID is required" });
+	}
+
+	const { user_id } = req.body;
+	const userId = Number(user_id);
+	if (!user_id || isNaN(user_id)) {
+		return next({ status: 400, message: "Valid user ID is required" });
+	}
+
+	try {
+		const guide = await projectService.addGuide(project_id, userId);
+		res.status(201).json({ success: true, data: guide });
+
+	} catch (err) {
+		next(err);
+	}
+}

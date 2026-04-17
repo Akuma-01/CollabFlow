@@ -3,6 +3,7 @@ import './config/env';
 import express from 'express';
 import errorMiddleware from './middlewares/error.middleware';
 import authRoutes from './routes/auth.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 import projectRoutes from './routes/projects.routes';
 import taskRoutes from './routes/tasks.routes';
 import userRoutes from './routes/users.routes';
@@ -19,6 +20,7 @@ app.use("/users", userRoutes);
 app.use("/projects", projectRoutes);
 app.use("/auth", authRoutes);
 app.use("/projects", taskRoutes);
+app.use('./dashboard', dashboardRoutes);
 app.use(errorMiddleware);
 
 app.listen(3000, () => {
