@@ -5,10 +5,7 @@ import { TaskStatus } from '../types';
 
 export const createTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const { title, description, deadline } = req.body
-		if (!title || typeof title !== "string") {
-			return next({ status: 400, message: "Valid title is required" })
-		}
+		const { title, description, deadline } = req.body;
 
 		const project_id = Number(req.params.projectId);
 		if (isNaN(project_id)) {
@@ -62,13 +59,9 @@ export const assignTask = async (req: Request, res: Response, next: NextFunction
 	}
 
 	const { assigned_to } = req.body;
-	const assignedTo = Number(assigned_to);
-	if (!assignedTo || isNaN(assignedTo)) {
-		return next({ status: 400, message: "Valid user ID is required" });
-	}
 
 	try {
-		const result = await tasksService.assignTask(task_id, project_id, assignedTo);
+		const result = await tasksService.assignTask(task_id, project_id, assigned_to);
 
 		res.status(200).json({
 			success: true,
@@ -92,9 +85,6 @@ export const updateTaskStatus = async (req: Request, res: Response, next: NextFu
 	}
 
 	const { status } = req.body;
-	if (!status || typeof status !== "string") {
-		return next({ status: 400, message: "Valid status is required" });
-	}
 
 	try {
 		const result = await tasksService.updateTaskStatus(task_id, status as TaskStatus);
@@ -121,13 +111,6 @@ export const updateTask = async (req: Request, res: Response, next: NextFunction
 	}
 
 	const { title, description } = req.body;
-	if (title && typeof (title) !== "string") {
-		return next({ status: 400, message: "Valid title is required" });
-	}
-
-	if (description && typeof (description) !== "string") {
-		return next({ status: 400, message: "Valid description is required" });
-	}
 
 	try {
 		const updatedTask = await tasksService.updateTask(task_id, project_id, title, description);

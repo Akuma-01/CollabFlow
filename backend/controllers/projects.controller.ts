@@ -13,11 +13,6 @@ export const getProjects = async (req: Request, res: Response, next: NextFunctio
 
 export const createProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const { title } = req.body;
-
-	if (!title || typeof title != "string") {
-		return next({ status: 400, message: "Valid title is required" });
-	}
-
 	const ownerId = req.user.id;
 
 	try {
@@ -76,10 +71,6 @@ export const deleteProject = async (req: Request, res: Response, next: NextFunct
 
 export const updateProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const { title } = req.body;
-	if (!title) {
-		next({ status: 400, message: "No updation data was sent" });
-		return;
-	}
 
 	const project_id = Number(req.params.projectId);
 	if (isNaN(project_id)) {
@@ -114,18 +105,6 @@ export const createProjectMember = async (req: Request, res: Response, next: Nex
 	}
 
 	const userId = Number(user_id);
-	if (!user_id || isNaN(userId)) {
-		return next({ status: 400, message: "Valid user ID is required" })
-	}
-
-	if (!role || typeof (role) !== "string") {
-		return next({ status: 400, message: "Valid role is required" });
-	}
-
-	const allowedRoles = ["editor", "viewer"];
-	if (!allowedRoles.includes(role)) {
-		return next({ status: 400, message: "Role must be editor or viewer" });
-	}
 
 	try {
 		const newProjectMember = await projectService.createProjectMember({
@@ -191,10 +170,6 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
 
 export const updateMemberRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	const { role } = req.body;
-	const allowedRoles = ["editor", "viewer"];
-	if (!allowedRoles.includes(role)) {
-		return next({ status: 400, message: "Role must be editor or viewer" });
-	}
 
 	const project_id = Number(req.params.projectId);
 	if (isNaN(project_id)) {
@@ -230,9 +205,6 @@ export const addGuide = async (req: Request, res: Response, next: NextFunction):
 
 	const { user_id } = req.body;
 	const userId = Number(user_id);
-	if (!user_id || isNaN(user_id)) {
-		return next({ status: 400, message: "Valid user ID is required" });
-	}
 
 	try {
 		const guide = await projectService.addGuide(project_id, userId);
