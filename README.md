@@ -19,3 +19,5 @@ Academic project collaboration platform for student teams and faculty mentors.
 - Public project profiles
 - University-wide project leaderboard
 - Project cover images/GIFs via file upload
+- Domain-based access control: users with verified college email 
+  domains can view projects without explicit invitation

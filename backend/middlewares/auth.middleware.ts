@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
+import {isUser} from '../services/projects.service';
 import jwt from 'jsonwebtoken';
 
-const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
 		const authHeader = req.headers.authorization;
 
@@ -23,7 +24,10 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction): void =
 			id: number;
 			email: string;
 		};
-
+		
+		if (!(await isUser(decoded.id))) {
+			return next({status: 401, message: "User no longer exists"});
+		}
 		// attach decoded user to req.user
 		req.user = decoded;
 

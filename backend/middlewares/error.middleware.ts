@@ -27,6 +27,14 @@ const errorMiddleware = (err: AppError, req: Request, res: Response, next: NextF
 		return;
 	}
 
+	if (err.code === "23505") {
+		res.status(400).json({
+			success: false,
+			message: "This record already exists"
+		});
+		return;
+	}
+
 	res.status(err.status || 500).json({
 		success: false,
 		message: err.message || "Internal Server Error"

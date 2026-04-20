@@ -1,4 +1,3 @@
-import { error } from 'console';
 import pool from '../config/db';
 import { Project, ProjectMember, ProjectRole } from '../types';
 
@@ -87,6 +86,11 @@ export const createProjectMember = async (data: {
 	role: ProjectRole;
 }): Promise<ProjectMember> => {
 	const { project_id, user_id, role } = data;
+
+	if (await isProjectOwner(project_id, user_id)) {
+		throw {status: 400, message: "Owner cannot be added as member"}
+	}
+
 	const result = await pool.query(
 		'INSERT INTO project_members (user_id, project_id, role) VALUES ($1, $2, $3) RETURNING *;',
 		[user_id, project_id, role]
@@ -94,9 +98,7 @@ export const createProjectMember = async (data: {
 	return result.rows[0];
 };
 
-export const getProjectMembers = async (
-	project_id: number
-): Promise<Array<{ id: number; email: string; role: ProjectRole }>> => {
+export const getProjectMembers = async (project_id: number): Promise<Array<{ id: number; email: string; role: ProjectRole }>> => {
 	const result = await pool.query(
 		'SELECT u.id, u.email, pm.role FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id=$1',
 		[project_id]
@@ -106,6 +108,12 @@ export const getProjectMembers = async (
 
 export const isUserMember = async (project_id: number, user_id: number): Promise<boolean> => {
 	const result = await pool.query("SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", [project_id, user_id]);
+
+	return result.rows.length > 0;
+}
+
+export const isUser = async (user_id: number): Promise<boolean> => {
+	const result = await pool.query("SELECT * FROM users WHERE id = $1", [user_id]);
 
 	return result.rows.length > 0;
 }
@@ -138,6 +146,7 @@ export const updateMemberRole = async (project_id: number, user_id: number, role
 	return result.rows[0];
 }
 
+
 // GUIDE
 export const addGuide = async (project_id: number, user_id: number): Promise<void> => {
 	const existing = await pool.query(
@@ -154,6 +163,15 @@ export const addGuide = async (project_id: number, user_id: number): Promise<voi
 	);
 
 	return result.rows[0];
+};
+
+export const isGuide = async (project_id: number, user_id: number): Promise<boolean> => {
+	const result = await pool.query(
+		'SELECT * FROM project_members WHERE user_id=$1 AND project_id=$2 AND role=$3',
+		[user_id, project_id, 'guide']
+	);
+
+	return result.rows.length > 0;
 };
 
 export const getUserDashboard = async (user_id: number) => {

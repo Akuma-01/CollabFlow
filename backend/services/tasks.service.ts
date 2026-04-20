@@ -2,7 +2,7 @@ import { error } from 'console';
 import { isDataView } from 'util/types';
 import pool from '../config/db';
 import { Task, TaskStatus } from '../types';
-import { isProjectOwner, isUserMember } from './projects.service';
+import { isProjectOwner, isUserMember, isGuide } from './projects.service';
 
 export const createTask = async (
 	title: string,
@@ -60,16 +60,21 @@ export const assignTask = async (
 
 	const isOwner = await isProjectOwner(taskData.project_id, assigned_to);
 	const isMember = await isUserMember(taskData.project_id, assigned_to);
+	const assigneeIsGuide = await isGuide(taskData.project_id, assigned_to);
 
-	if (isOwner || isMember) {
-		const updateResult = await pool.query(
-			'UPDATE tasks SET assigned_to = $1 WHERE id = $2 RETURNING *',
-			[assigned_to, task_id]
-		);
-		return updateResult.rows[0];
-	} else {
+	if (assigneeIsGuide) {
+		throw { status: 403, message: 'Cannot assign task to a guide' };
+	}
+
+	if (!isOwner && !isMember) {
 		throw { status: 403, message: 'User is not a member of this project' };
 	}
+	
+	const updateResult = await pool.query(
+		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 RETURNING *',
+		[assigned_to, task_id]
+	);
+	return updateResult.rows[0];
 };
 
 export const updateTaskStatus = async (task_id: number, status: TaskStatus): Promise<Task> => {
