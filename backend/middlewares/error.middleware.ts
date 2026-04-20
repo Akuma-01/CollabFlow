@@ -3,14 +3,6 @@ import { AppError } from '../types';
 
 
 const errorMiddleware = (err: AppError, req: Request, res: Response, next: NextFunction): void => {
-	if (err.message === "EMAIL_EXISTS") {
-		res.status(400).json({
-			success: false,
-			message: "Email already exists"
-		})
-		return;
-	}
-
 	if (err.code === "23503") {
 		res.status(400).json({
 			success: false,
@@ -31,6 +23,14 @@ const errorMiddleware = (err: AppError, req: Request, res: Response, next: NextF
 		res.status(400).json({
 			success: false,
 			message: "This record already exists"
+		});
+		return;
+	}
+
+	if (err.code === "22P02") {
+		res.status(400).json({
+			success: false,
+			message: "Number is expected"
 		});
 		return;
 	}

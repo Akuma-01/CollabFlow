@@ -11,7 +11,7 @@ export const registerUser = async (
 	const existing = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
 
 	if (existing.rows.length > 0) {
-		throw new Error("EMAIL_EXISTS");
+		throw { status: 400, message: "Email already exists" };
 	}
 
 	const hashedPassword = await bcrypt.hash(password, 10);
@@ -26,7 +26,7 @@ export const registerUser = async (
 
 	} catch (err: any) {
 		if (err.code === "23505") {
-			throw new Error("EMAIL_EXISTS");
+			throw { status: 400, message: "Email already exists" };
 		}
 		throw err;
 	}
