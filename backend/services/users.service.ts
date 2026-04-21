@@ -2,7 +2,7 @@ import pool from '../config/db';
 import { User } from '../types';
 
 export const getAllUsers = async (): Promise<User[]> => {
-	const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
+	const result = await pool.query('SELECT id, name, email FROM users ORDER BY id ASC');
 	return result.rows;
 };
 
