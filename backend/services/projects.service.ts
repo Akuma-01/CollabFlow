@@ -88,7 +88,7 @@ export const createProjectMember = async (data: {
 	const { project_id, user_id, role } = data;
 
 	if (await isProjectOwner(project_id, user_id)) {
-		throw {status: 400, message: "Owner cannot be added as member"}
+		throw { status: 400, message: "Owner cannot be added as member" }
 	}
 
 	const result = await pool.query(
@@ -186,8 +186,8 @@ export const getUserDashboard = async (user_id: number) => {
 			COUNT (DISTINCT CASE WHEN t.status = 'todo' THEN t.id END) AS todo_count,
 			COUNT (DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END) AS in_progress_count,
 			COUNT (DISTINCT CASE WHEN t.status = 'done' THEN t.id END) AS done_count
-		FROM project p
-		LEFT JOIN project_members pm ON pm.user_id = p.id
+		FROM projects p
+		LEFT JOIN project_members pm ON pm.project_id = p.id
 		LEFT JOIN project_members pm_viewer ON pm_viewer.project_id = p.id AND pm_viewer.user_id = $1
 		LEFT JOIN tasks t ON t.project_id = p.id
 		WHERE p.owner_id = $1 
