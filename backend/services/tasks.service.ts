@@ -2,7 +2,7 @@ import { error } from 'console';
 import { isDataView } from 'util/types';
 import pool from '../config/db';
 import { Task, TaskStatus } from '../types';
-import { isProjectOwner, isUserMember, isGuide } from './projects.service';
+import { isGuide, isProjectOwner, isUserMember } from './projects.service';
 
 export const createTask = async (
 	title: string,
@@ -30,7 +30,7 @@ export const getProjectTasks = async (
       t.description, 
       t.project_id, 
       u.name AS assigned_to_name, 
-      status 
+      t.status 
     FROM tasks t 
     LEFT JOIN users u ON t.assigned_to = u.id 
     WHERE t.project_id = $1 
@@ -69,7 +69,7 @@ export const assignTask = async (
 	if (!isOwner && !isMember) {
 		throw { status: 403, message: 'User is not a member of this project' };
 	}
-	
+
 	const updateResult = await pool.query(
 		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 RETURNING *',
 		[assigned_to, task_id]
