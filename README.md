@@ -106,3 +106,4 @@ DB_PORT=
 - GET /users?search= endpoint for user lookup
 - Refresh token system for better auth security
 - Real-time notifications via WebSockets
+- Comment/feedback system for faculty guides to review student progress

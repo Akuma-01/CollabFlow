@@ -43,6 +43,7 @@ export default function RegisterPage() {
 			})
 			const loginData = await loginResponse.json()
 			localStorage.setItem("token", loginData.data.token)
+			localStorage.setItem("user_id", data.data.user.id);
 
 			router.push("/dashboard")
 

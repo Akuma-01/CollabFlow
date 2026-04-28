@@ -29,7 +29,8 @@ export default function LoginPage() {
 			}
 
 			// optional: store token
-			localStorage.setItem("token", data.data.token)
+			localStorage.setItem("token", data.data.token);
+			localStorage.setItem("user_id", data.data.user.id);
 
 			router.push("/dashboard")
 		} catch (err) {

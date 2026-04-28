@@ -37,11 +37,11 @@ export const getAllProjects = async (userId: number): Promise<Project[]> => {
 export const getProjectDetails = async (project_id: number): Promise<Project | undefined> => {
 	const result = await pool.query(
 		`SELECT p.id, p.title, p.owner_id,
-      COUNT(DISTINCT pm.user_id) AS member_count,
-      COUNT(DISTINCT t.id) AS task_count,
-      COUNT(DISTINCT CASE WHEN t.status = 'todo' THEN t.id END) AS todo_count,
-      COUNT(DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END) AS in_progress_count,
-      COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) AS done_count
+      COUNT(DISTINCT pm.user_id)::int AS member_count,
+      COUNT(DISTINCT t.id)::int AS task_count,
+      COUNT(DISTINCT CASE WHEN t.status = 'todo' THEN t.id END)::int AS todo_count,
+      COUNT(DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END)::int AS in_progress_count,
+      COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END)::int AS done_count
     FROM projects p
     LEFT JOIN tasks t ON t.project_id = p.id
     LEFT JOIN project_members pm ON pm.project_id = p.id
