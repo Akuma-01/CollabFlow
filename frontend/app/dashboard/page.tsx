@@ -18,9 +18,14 @@ type Project = {
 
 export default function DashboardPage() {
 	const router = useRouter();
+	const BASE_URL = process.env.NEXT_PUBLIC_API_URL!;
+
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [projects, setProjects] = useState<Project[]>([]);
+	const [showForm, setShowForm] = useState(false);
+	const [projectTitle, setProjectTitle] = useState("");
+	const [projectAdding, setProjectAdding] = useState(false);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -62,15 +67,106 @@ export default function DashboardPage() {
 	if (loading) return <p>Loading...</p>
 	if (error) return <p>{error}</p>
 
+	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		setProjectAdding(true);
+
+		const token = localStorage.getItem("token");
+		if (!token) {
+			router.replace("/login");
+			return;
+		}
+
+		try {
+			const res = await fetch(`${BASE_URL}/projects`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ title: projectTitle })
+			})
+
+			if (!res.ok) {
+				throw new Error("Failed to create the project");
+			}
+
+			const data = await res.json();
+			const project = data.data;
+
+			setProjects(prev => [
+				{
+					...project,
+					member_count: 1,
+					task_count: 0,
+					todo_count: 0,
+					in_progress_count: 0,
+					done_count: 0,
+					my_role: "owner"
+				},
+				...prev
+			]);
+
+			setProjectTitle("");
+			setShowForm(false);
+
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Project creation failed");
+		} finally {
+			setProjectAdding(false);
+		}
+	}
+
+	const handleCancel = () => {
+		setShowForm(false);
+		setError(null);
+		setProjectTitle("")
+	}
+
 	return (
 		<div className="p-8">
 			<h1 className="text-2xl font-bold">Dashboard</h1>
 			<p>Welcome to CollabFlow</p>
 
 			<div className="mt-4">
-				<button className="px-4 py-2 bg-blue-600 text-white rounded">
+				<button
+					onClick={() => {
+						setShowForm(prev => !prev);
+						setError(null);
+					}}
+					className="px-4 py-2 bg-blue-600 text-white rounded"
+				>
 					Create New Project
 				</button>
+				{showForm && (
+					<form onSubmit={handleSubmit} className="flex flex-col gap-4 p-8">
+						<input
+							required
+							type="text"
+							value={projectTitle}
+							className="border-2 rounded-xl p-4 bg-white border-blue-700"
+							onChange={(e) => setProjectTitle(e.target.value)}
+							placeholder="Project Title"
+						/>
+						<div className="flex gap-2">
+							<button
+								type="submit"
+								disabled={projectAdding}
+								className="bg-blue-700 text-white rounded-xl p-4 hover:bg-blue-800"
+							>
+								{projectAdding ? "Adding..." : "Add"}
+							</button>
+							<button
+								type="button"
+								onClick={handleCancel}
+								className="text-gray-500"
+							>
+								Cancel
+							</button>
+						</div>
+
+					</form>
+				)}
 			</div>
 
 			<div className="mt-6">

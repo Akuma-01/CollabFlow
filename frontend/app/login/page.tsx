@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
@@ -61,16 +62,19 @@ export default function LoginPage() {
 					placeholder="Password"
 				/>
 
-				<button type="submit" className="bg-blue-700 text-white rounded-xl p-4 w-full hover:bg-blue-800">
-					Login
-				</button>
 				<button
 					type="submit"
+					className="bg-blue-700 text-white rounded-xl p-4 w-full hover:bg-blue-800"
 					disabled={loading}
-					className="bg-blue-700 text-white rounded-xl p-4 hover:bg-blue-800"
 				>
-					{loading ? "Registering..." : "Register"}
+					{loading ? "Logging In..." : "Login"}
 				</button>
+				<p className="text-sm text-center">
+					Don&apos;t have an account?
+					<Link href="/register" className="text-blue-600 hover:underline">
+						Register
+					</Link>
+				</p>
 			</form>
 		</div>
 	)

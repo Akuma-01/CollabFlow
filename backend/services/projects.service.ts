@@ -37,7 +37,7 @@ export const getAllProjects = async (userId: number): Promise<Project[]> => {
 export const getProjectDetails = async (project_id: number): Promise<Project | undefined> => {
 	const result = await pool.query(
 		`SELECT p.id, p.title, p.owner_id,
-      COUNT(DISTINCT pm.user_id)::int AS member_count,
+      ( 1 + COUNT(DISTINCT pm.user_id))::int AS member_count,
       COUNT(DISTINCT t.id)::int AS task_count,
       COUNT(DISTINCT CASE WHEN t.status = 'todo' THEN t.id END)::int AS todo_count,
       COUNT(DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END)::int AS in_progress_count,
@@ -181,7 +181,7 @@ export const getUserDashboard = async (user_id: number) => {
 			p.title,
 			p.owner_id,
 			pm_viewer.role AS my_role,
-			COUNT (DISTINCT pm.user_id) AS member_count,
+			(1 + COUNT(DISTINCT pm.user_id))::int AS member_count,
 			COUNT (DISTINCT t.id) AS task_count,
 			COUNT (DISTINCT CASE WHEN t.status = 'todo' THEN t.id END) AS todo_count,
 			COUNT (DISTINCT CASE WHEN t.status = 'in_progress' THEN t.id END) AS in_progress_count,
@@ -196,7 +196,7 @@ export const getUserDashboard = async (user_id: number) => {
 				WHERE project_id = p.id AND user_id = $1
 			)
 		GROUP BY p.id, p.title, p.owner_id, pm_viewer.role
-		ORDER BY p.id ASC
+		ORDER BY p.id DESC
 	`, [user_id]);
 
 	return result.rows;

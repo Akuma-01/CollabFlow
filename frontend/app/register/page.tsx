@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -41,9 +42,14 @@ export default function RegisterPage() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ email, password })
 			})
+
+			if (!loginResponse.ok) {
+				throw new Error("Login failed after registration");
+			}
+
 			const loginData = await loginResponse.json()
 			localStorage.setItem("token", loginData.data.token)
-			localStorage.setItem("user_id", data.data.user.id);
+			localStorage.setItem("user_id", loginData.data.user.id);
 
 			router.push("/dashboard")
 
@@ -89,6 +95,15 @@ export default function RegisterPage() {
 				>
 					{loading ? "Registering..." : "Register"}
 				</button>
+				<p className="text-sm text-center">
+					Already have an account?
+					<Link
+						href="/login"
+						className="text-blue-600 hover:underline"
+					>
+						Login
+					</Link>
+				</p>
 			</form>
 
 		</div>
