@@ -20,6 +20,7 @@ export const createTask = async (req: Request, res: Response, next: NextFunction
 		})
 
 	} catch (err) {
+		console.error("CREATE TASK ERROR:", err);
 		next(err);
 	}
 }

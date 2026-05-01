@@ -50,6 +50,10 @@ type MemberBody = {
 	role: ProjectRole;
 };
 
+type TaskStatusBody = {
+	status: TaskStatus;
+}
+
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
 const getAuthHeaders = (): HeadersInit => {
@@ -63,9 +67,9 @@ const getAuthHeaders = (): HeadersInit => {
 };
 
 const apiFetch = (
-	method: "GET" | "POST",
+	method: "GET" | "POST" | "PATCH",
 	url: string,
-	body?: TaskBody | MemberBody
+	body?: TaskBody | MemberBody | TaskStatusBody,
 ) =>
 	fetch(url, {
 		method,
@@ -248,6 +252,40 @@ function TaskPanel({
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	// ─── Drag State ────────────────────────────────────────────
+	const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+
+	const handleDragStart = (task: Task) => {
+		setDraggedTask(task);
+	};
+
+	const handleDrop = async (newStatus: TaskStatus) => {
+		if (!draggedTask || draggedTask.status === newStatus) return;
+
+		try {
+			const res = await apiFetch(
+				"PATCH",
+				`${baseUrl}/projects/${projectId}/tasks/${draggedTask.id}/status`,
+				{ status: newStatus }
+			);
+
+			if (!res.ok) throw new Error("Status update failed");
+
+			// update UI locally
+			onTaskAdded({
+				...draggedTask,
+				status: newStatus
+			});
+
+		} catch (err) {
+			setError("Failed to update status");
+		} finally {
+			setDraggedTask(null);
+		}
+	};
+
+	const allowDrop = (e: React.DragEvent) => e.preventDefault();
+
 	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setSubmitting(true);
@@ -298,6 +336,21 @@ function TaskPanel({
 		setError(null);
 	}
 
+	// ─── Kanban Setup ───────────────────────────────────────────
+	const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
+
+	const statusMeta = {
+		todo: { title: "Todo" },
+		in_progress: { title: "In Progress" },
+		done: { title: "Done" },
+	};
+
+	const grouped = statusOrder.reduce((acc, s) => {
+		acc[s] = tasks.filter(t => t.status === s);
+		return acc;
+	}, {} as Record<TaskStatus, Task[]>);
+
+	// ─── UI ─────────────────────────────────────────────────────
 	return (
 		<div className="flex-1 bg-white shadow rounded-xl p-4">
 			{/* Header */}
@@ -315,6 +368,7 @@ function TaskPanel({
 
 			{error && <p className="text-red-500 text-sm mb-2">{error}</p>}
 
+			{/* Form */}
 			{showForm && (
 				<form
 					onSubmit={handleSubmit}
@@ -366,7 +420,7 @@ function TaskPanel({
 						className="border p-2 rounded"
 					/>
 
-					<div className="flex gap-2">
+					<div className="flex gap-3">
 						<button
 							type="submit"
 							disabled={submitting}
@@ -378,7 +432,7 @@ function TaskPanel({
 						<button
 							type="button"
 							onClick={handleCancel}
-							className="text-gray-500"
+							className="text-gray-500 bg-red-100 px-3 py-1 rounded"
 						>
 							Cancel
 						</button>
@@ -387,27 +441,52 @@ function TaskPanel({
 				</form>
 			)}
 
-			{/* Task list */}
-			<div className="space-y-2">
-				{tasks.length === 0 ? (
-					<p className="text-sm text-gray-400">No tasks yet.</p>
-				) : (
-					<>
-						{tasks.map((task) => (
-							<div key={task.id} className="text-sm border-b pb-1 space-y-0.5">
-								<div className="flex justify-between">
-									<span className="font-medium">{task.title}</span>
-									<span className="text-gray-500">{task.status}</span>
-								</div>
-								<div className="flex justify-between text-gray-400">
-									<span>{task.assigned_to_name || "Unassigned"}</span>
-									{task.deadline && <span>Due: {task.deadline}</span>}
-								</div>
-							</div>
-						))}
-					</>
+			{/* Kanban Board */}
+			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-				)}
+				{statusOrder.map((statusKey) => (
+					<div
+						key={statusKey}
+						className="bg-gray-50 rounded-lg p-3"
+						onDragOver={allowDrop}
+						onDrop={() => handleDrop(statusKey)}
+					>
+						{/* Column Header */}
+						<div className="flex justify-between items-center mb-3">
+							<h3 className="text-sm font-semibold">
+								{statusMeta[statusKey].title}
+							</h3>
+							<span className="text-xs text-gray-500">
+								{grouped[statusKey].length}
+							</span>
+						</div>
+
+						{/* Tasks */}
+						<div className="space-y-2">
+							{grouped[statusKey].length === 0 ? (
+								<p className="text-xs text-gray-400">No tasks</p>
+							) : (
+								grouped[statusKey].map((task) => (
+									<div
+										key={task.id}
+										draggable
+										onDragStart={() => handleDragStart(task)}
+										className="bg-white border rounded-lg p-3 shadow-sm text-sm cursor-move"
+									>
+										<div className="font-medium">{task.title}</div>
+
+										<div className="flex justify-between text-xs text-gray-500">
+											<span>{task.assigned_to_name || "Unassigned"}</span>
+											{task.deadline && <span>{task.deadline}</span>}
+										</div>
+									</div>
+								))
+							)}
+						</div>
+
+					</div>
+				))}
+
 			</div>
 		</div>
 	)
@@ -497,44 +576,74 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 		setMembers(data.data);
 	};
 
-	return (
-		<div className="flex gap-6 p-6">
+	// Drag component
+	const upsertTask = (task: Task) => {
+		setTasks(prev => {
+			const exists = prev.find(t => t.id === task.id);
+			if (exists) {
+				return prev.map(t => t.id === task.id ? task : t);
+			}
+			return [...prev, task];
+		});
+	};
 
-			{/* Project Summary */}
-			<div className="flex-1 bg-white shadow rounded-xl p-4">
-				<h2 className="text-lg font-semibold mb-3">Project</h2>
-				<div className="space-y-1">
-					<div className="font-medium">{projectDetails.title}</div>
-					<div className="text-sm text-gray-600">
+	return (
+		<div className="p-6 max-w-6xl mx-auto space-y-6">
+
+			{/* Back Link */}
+			<div>
+				<button
+					onClick={() => router.push("/dashboard")}
+					className="text-blue-600 text-sm hover:underline"
+				>
+					← Back to Dashboard
+				</button>
+			</div>
+
+			{/* Project Summary (Full Width) */}
+			<div className="bg-white shadow rounded-xl p-6">
+				<h2 className="text-xl font-semibold mb-3">{projectDetails.title}</h2>
+
+				<div className="flex flex-wrap gap-3 text-sm">
+					<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600">
 						Todo: {projectDetails.todo_count}
-					</div>
-					<div className="text-sm text-gray-600">
-						In progress: {projectDetails.in_progress_count}
-					</div>
-					<div className="text-sm text-gray-600">
+					</span>
+					<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700">
+						In Progress: {projectDetails.in_progress_count}
+					</span>
+					<span className="px-3 py-1 rounded-full bg-green-100 text-green-700">
 						Done: {projectDetails.done_count}
-					</div>
+					</span>
+					<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700">
+						Members: {projectDetails.member_count}
+					</span>
 				</div>
 			</div>
 
-			{/* Members */}
-			<MemberPanel
-				members={members}
-				isOwner={isOwner}
-				projectId={projectId}
-				baseUrl={BASE_URL}
-				onMemberAdded={refetchMembers}
-			/>
+			{/* Members + Tasks Grid */}
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-			{/* Tasks */}
-			<TaskPanel
-				tasks={tasks}
-				members={members}
-				canCreateTask={!!canCreateTask}
-				projectId={projectId}
-				baseUrl={BASE_URL}
-				onTaskAdded={(task) => setTasks((prev) => [...prev, task])}
-			/>
+				{/* Members */}
+				<MemberPanel
+					members={members}
+					isOwner={isOwner}
+					projectId={projectId}
+					baseUrl={BASE_URL}
+					onMemberAdded={refetchMembers}
+				/>
+
+				{/* Tasks */}
+				<TaskPanel
+					tasks={tasks}
+					members={members}
+					canCreateTask={!!canCreateTask}
+					projectId={projectId}
+					baseUrl={BASE_URL}
+					onTaskAdded={upsertTask}
+				/>
+
+			</div>
+
 		</div>
 	);
 }

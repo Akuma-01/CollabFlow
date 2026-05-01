@@ -62,49 +62,59 @@ export default function RegisterPage() {
 	}
 
 	return (
-		<div className="flex justify-center items-center min-h-screen">
-			<form onSubmit={handleSubmit} className="flex flex-col gap-4 p-8">
+		<div className="flex justify-center items-center min-h-screen bg-gray-200">
+			<div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+				<h1 className="text-2xl font-bold text-center mb-6 text-blue-600">
+					CollabFlow
+				</h1>
 
-				{error && <p className="text-red-500">{error}</p>}
+				<form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-				<input
-					type="text"
-					className="border-2 rounded-xl p-4 bg-white border-blue-700"
-					value={username}
-					onChange={e => setUsername(e.target.value)}
-					placeholder="Username"
-				/>
-				<input
-					type="email"
-					className="border-2 rounded-xl p-4 bg-white border-blue-700"
-					value={email}
-					onChange={e => setEmail(e.target.value)}
-					placeholder="Email"
-				/>
-				<input
-					type="password"
-					className="border-2 rounded-xl p-4 bg-white border-blue-700"
-					value={password}
-					onChange={e => setPassword(e.target.value)}
-					placeholder="Password"
-				/>
-				<button
-					type="submit"
-					disabled={loading}
-					className="bg-blue-700 text-white rounded-xl p-4 hover:bg-blue-800"
-				>
-					{loading ? "Registering..." : "Register"}
-				</button>
-				<p className="text-sm text-center">
-					Already have an account?
-					<Link
-						href="/login"
-						className="text-blue-600 hover:underline"
+					{error && <p className="text-red-500">{error}</p>}
+
+					<input
+						type="text"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={username}
+						onChange={e => setUsername(e.target.value)}
+						placeholder="Username"
+						required
+					/>
+					<input
+						type="email"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={email}
+						onChange={e => setEmail(e.target.value)}
+						placeholder="Email"
+						required
+					/>
+					<input
+						type="password"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={password}
+						onChange={e => setPassword(e.target.value)}
+						placeholder="Password"
+						required
+					/>
+					<button
+						type="submit"
+						disabled={loading}
+						className="bg-blue-600 text-white rounded-lg p-4 hover:bg-blue-700 disabled:opacity-50"
 					>
-						Login
-					</Link>
-				</p>
-			</form>
+						{loading ? "Registering..." : "Register"}
+					</button>
+					<p className="text-sm text-center">
+						Already have an account?
+						<Link
+							href="/login"
+							className="text-blue-600 hover:underline"
+						>
+							Login
+						</Link>
+					</p>
+				</form>
+			</div>
+
 
 		</div>
 	)

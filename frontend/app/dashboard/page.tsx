@@ -124,88 +124,107 @@ export default function DashboardPage() {
 	}
 
 	return (
-		<div className="p-8">
-			<h1 className="text-2xl font-bold">Dashboard</h1>
-			<p>Welcome to CollabFlow</p>
+		<div className="p-8 max-w-6xl mx-auto">
 
-			<div className="mt-4">
+			{/* Header */}
+			<div className="flex justify-between items-center mb-6">
+				<div>
+					<h1 className="text-2xl font-bold">My Projects</h1>
+					<p className="text-sm text-gray-600">
+						{projects.length} project{projects.length !== 1 && "s"}
+					</p>
+				</div>
+
 				<button
 					onClick={() => {
 						setShowForm(prev => !prev);
 						setError(null);
 					}}
-					className="px-4 py-2 bg-blue-600 text-white rounded"
+					className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
 				>
-					Create New Project
+					+ Create Project
 				</button>
-				{showForm && (
-					<form onSubmit={handleSubmit} className="flex flex-col gap-4 p-8">
-						<input
-							required
-							type="text"
-							value={projectTitle}
-							className="border-2 rounded-xl p-4 bg-white border-blue-700"
-							onChange={(e) => setProjectTitle(e.target.value)}
-							placeholder="Project Title"
-						/>
-						<div className="flex gap-2">
-							<button
-								type="submit"
-								disabled={projectAdding}
-								className="bg-blue-700 text-white rounded-xl p-4 hover:bg-blue-800"
-							>
-								{projectAdding ? "Adding..." : "Add"}
-							</button>
-							<button
-								type="button"
-								onClick={handleCancel}
-								className="text-gray-500"
-							>
-								Cancel
-							</button>
-						</div>
-
-					</form>
-				)}
 			</div>
 
-			<div className="mt-6">
-				{projects.length === 0 ? (
-					<p>No projects yet</p>
-				) : (
-					projects.map((p) => (
+			{/* Create Project Form */}
+			{showForm && (
+				<form
+					onSubmit={handleSubmit}
+					className="mb-6 bg-white p-5 rounded-xl shadow max-w-md flex flex-col gap-4"
+				>
+					<input
+						required
+						type="text"
+						value={projectTitle}
+						onChange={(e) => setProjectTitle(e.target.value)}
+						placeholder="Project Title"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					/>
 
-						<div
-							key={p.id}
-							className="border rounded-lg p-4 mb-4 shadow-sm hover:shadow-md transition cursor-pointer"
+					<div className="flex gap-3">
+						<button
+							type="submit"
+							disabled={projectAdding}
+							className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
 						>
-							<div className="text-lg font-semibold">{p.title}</div>
+							{projectAdding ? "Creating..." : "Create"}
+						</button>
 
-							<div className="text-sm text-gray-600 mt-1">
-								Role: {p.my_role ? p.my_role : "owner"}
-							</div>
+						<button
+							type="button"
+							onClick={handleCancel}
+							className="text-gray-500 hover:text-gray-700"
+						>
+							Cancel
+						</button>
+					</div>
+				</form>
+			)}
 
-							<div className="mt-3 text-sm">
-								<div>Members: {p.member_count}</div>
-								<div>Todo: {p.todo_count}</div>
-								<div>In Progress: {p.in_progress_count}</div>
-								<div>Done: {p.done_count}</div>
-							</div>
+			{/* Projects List */}
+			<div>
+				{projects.length === 0 ? (
+					<div className="text-gray-500 text-sm">No projects yet</div>
+				) : (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-							<div className="mt-3">
-								<Link
-									href={`/projects/${p.id}`}
-									className="text-blue-600 text-sm hover:underline"
-								>
-									Open Project →
-								</Link>
+						{projects.map((p) => (
+							<div
+								key={p.id}
+								className="bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition"
+							>
+								{/* Title */}
+								<div className="text-lg font-semibold">{p.title}</div>
+
+								{/* Role */}
+								<div className="text-sm text-gray-500 mt-1">
+									Role: {p.my_role ? p.my_role : "owner"}
+								</div>
+
+								{/* Stats */}
+								<div className="mt-3 text-sm text-gray-700 space-y-1">
+									<div>Members: {p.member_count ?? 0}</div>
+									<div>Todo: {p.todo_count ?? 0}</div>
+									<div>In Progress: {p.in_progress_count ?? 0}</div>
+									<div>Done: {p.done_count ?? 0}</div>
+								</div>
+
+								{/* Action */}
+								<div className="mt-4">
+									<Link
+										href={`/projects/${p.id}`}
+										className="text-blue-600 text-sm hover:underline"
+									>
+										Open Project →
+									</Link>
+								</div>
 							</div>
-						</div>
-					))
+						))}
+
+					</div>
 				)}
-
 			</div>
 
 		</div>
-	)
+	);
 }

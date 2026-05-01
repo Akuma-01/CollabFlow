@@ -43,39 +43,52 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className="flex min-h-screen items-center justify-center">
-			<form onSubmit={handleSubmit} className="flex flex-col gap-4 p-8 bg-white rounded-2xl shadow-md w-full max-w-md">
-				{error && <p className="text-red-500">{error}</p>}
-				<input
-					type="email"
-					className="border-2 rounded-xl p-4 bg-white border-blue-700"
-					value={email}
-					onChange={e => setEmail(e.target.value)}
-					placeholder="Email"
-				/>
+		<div className="min-h-screen bg-gray-200 flex items-center justify-center">
+			<div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
 
-				<input
-					type="password"
-					className="border-2 rounded-xl p-4 bg-white border-blue-700"
-					value={password}
-					onChange={e => setPassword(e.target.value)}
-					placeholder="Password"
-				/>
+				<h1 className="text-2xl font-bold text-center mb-6 text-blue-600">
+					CollabFlow
+				</h1>
 
-				<button
-					type="submit"
-					className="bg-blue-700 text-white rounded-xl p-4 w-full hover:bg-blue-800"
-					disabled={loading}
-				>
-					{loading ? "Logging In..." : "Login"}
-				</button>
-				<p className="text-sm text-center">
-					Don&apos;t have an account?
-					<Link href="/register" className="text-blue-600 hover:underline">
-						Register
-					</Link>
-				</p>
-			</form>
+				<form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+					{error && <p className="text-red-500 text-sm">{error}</p>}
+
+					<input
+						type="email"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={email}
+						onChange={e => setEmail(e.target.value)}
+						placeholder="Email"
+						required
+					/>
+
+					<input
+						type="password"
+						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						value={password}
+						onChange={e => setPassword(e.target.value)}
+						placeholder="Password"
+						required
+					/>
+
+					<button
+						type="submit"
+						disabled={loading}
+						className="bg-blue-600 text-white rounded-lg p-3 hover:bg-blue-700 disabled:opacity-50"
+					>
+						{loading ? "Logging In..." : "Login"}
+					</button>
+
+					<p className="text-sm text-center">
+						Don&apos;t have an account?{" "}
+						<Link href="/register" className="text-blue-600 hover:underline">
+							Register
+						</Link>
+					</p>
+
+				</form>
+			</div>
 		</div>
 	)
 }
