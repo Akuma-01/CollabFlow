@@ -31,7 +31,7 @@ type Task = {
 	deadline: string | null;
 };
 
-type ProjectRole = "editor" | "viewer" | "guide";
+type ProjectRole = "editor" | "viewer" | "guide" | "owner";
 
 type Member = {
 	id: number;
@@ -207,10 +207,23 @@ function MemberPanel({
 						{members.map((member) => (
 							<div
 								key={member.id}
-								className="flex justify-between text-sm border-b pb-1"
+								className="flex justify-between items-center text-sm border-b pb-2 gap-3"
 							>
-								<span>{member.email}</span>
-								<span className="text-gray-500">{member.role}</span>
+								<span className="truncate min-w-0">{member.email}</span>
+
+								<span
+									className={
+										member.role === "owner"
+											? "text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 shrink-0"
+											: member.role === "editor"
+												? "text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 shrink-0"
+												: member.role === "guide"
+													? "text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 shrink-0"
+													: "text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0"
+									}
+								>
+									{member.role}
+								</span>
 							</div>
 						))}
 					</>
@@ -344,6 +357,13 @@ function TaskPanel({
 		setError(null);
 	}
 
+	const formatDeadline = (deadline: string) => {
+		return new Date(deadline).toLocaleDateString("en-IN", {
+			day: "2-digit",
+			month: "short",
+			year: "numeric",
+		});
+	};
 	// ─── Kanban Setup ───────────────────────────────────────────
 	const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
 
@@ -507,33 +527,35 @@ function TaskPanel({
 										key={task.id}
 										draggable
 										onDragStart={() => handleDragStart(task)}
-										className="bg-white border rounded-lg p-3 shadow-sm text-sm cursor-move"
+										className="bg-white border rounded-lg p-3 shadow-sm text-sm cursor-move max-w-full overflow-hidden"
 									>
-										<div className="font-medium">{task.title}</div>
+										<div className="font-medium mb-2 truncate">
+											{task.title}
+										</div>
 
-										<div className="flex justify-between items-center text-xs text-gray-500 gap-2">
-
-											<div>
+										<div className="flex flex-col gap-2 text-xs text-gray-500 min-w-0">
+											{/* Assignee */}
+											<div className="min-w-0">
 												{editingAssigneeTaskId === task.id ? (
 													<select
 														autoFocus
 														value={task.assigned_to ?? ""}
 														onChange={async (e) => {
-															const userId = e.target.value
-																? Number(e.target.value)
-																: null;
-
+															const userId = e.target.value ? Number(e.target.value) : null;
 															await handleAssign(task, userId);
 														}}
 														onBlur={() => setEditingAssigneeTaskId(null)}
-														className="border rounded px-2 py-1 text-xs bg-white"
+														className="border rounded px-2 py-1 text-xs bg-white w-full max-w-full truncate"
 													>
 														<option value="">Unassigned</option>
-														{members.map((m) => (
-															<option key={m.id} value={m.id}>
-																{m.email}
-															</option>
-														))}
+
+														{members
+															.filter((m) => m.role !== "guide")
+															.map((m) => (
+																<option key={m.id} value={m.id}>
+																	{m.email} {m.role === "owner" ? "(Owner)" : ""}
+																</option>
+															))}
 													</select>
 												) : (
 													<button
@@ -541,8 +563,8 @@ function TaskPanel({
 														onClick={() => setEditingAssigneeTaskId(task.id)}
 														className={
 															task.assigned_to
-																? "px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
-																: "px-2 py-1 rounded-full bg-gray-100 text-gray-500 border hover:bg-gray-200"
+																? "max-w-full px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 truncate block"
+																: "max-w-full px-2 py-1 rounded-full bg-gray-100 text-gray-500 border hover:bg-gray-200 truncate block"
 														}
 													>
 														{task.assigned_to_email ?? "Unassigned"}
@@ -551,7 +573,11 @@ function TaskPanel({
 											</div>
 
 											{/* Deadline */}
-											{task.deadline && <span>{task.deadline}</span>}
+											{task.deadline && (
+												<div className="text-[11px] text-gray-400 truncate">
+													Due: {formatDeadline(task.deadline)}
+												</div>
+											)}
 										</div>
 									</div>
 								))
@@ -684,84 +710,68 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 	}
 
 	return (
-		<div className="p-6 max-w-6xl mx-auto space-y-6">
-
-			{/* Back Link */}
-			<div>
-				<button
-					onClick={() => router.push("/dashboard")}
-					className="text-blue-600 text-sm hover:underline"
-				>
-					← Back to Dashboard
-				</button>
-			</div>
-
-			{/* Project Summary */}
-			<div className="bg-white shadow rounded-2xl p-6 flex justify-between items-center">
-
-				{/* Left Section */}
-				<div className="space-y-3">
-					{/* Title */}
-					<h2 className="text-2xl font-semibold text-gray-800">
-						{projectDetails.title}
-					</h2>
-
-					{/* Stats */}
-					<div className="flex flex-wrap gap-2 text-sm">
-						<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
-							📝 {projectDetails.todo_count} Todo
-						</span>
-						<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
-							⏳ {projectDetails.in_progress_count} In Progress
-						</span>
-						<span className="px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
-							✅ {projectDetails.done_count} Done
-						</span>
-						<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
-							👥 {projectDetails.member_count} Members
-						</span>
-
-					</div>
-
+		<div className="min-h-screen bg-gray-50">
+			<div className="mx-auto max-w-7xl px-6 py-4 space-y-5">
+				<div>
+					<button
+						onClick={() => router.push("/dashboard")}
+						className="text-blue-600 text-sm hover:underline"
+					>
+						← Back to Dashboard
+					</button>
 				</div>
 
-				{/* Right Section */}
-				{isOwner && (
-					<button
-						onClick={handleDeleteProject}
-						className="text-red-500 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm"
-					>
-						Delete
-					</button>
-				)}
+				<div className="bg-white border shadow-sm rounded-2xl px-5 py-4 flex justify-between items-center">
+					<div className="space-y-3">
+						<h2 className="text-2xl font-semibold text-gray-800">
+							{projectDetails.title}
+						</h2>
 
+						<div className="flex flex-wrap gap-2 text-sm">
+							<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
+								📝 {projectDetails.todo_count} Todo
+							</span>
+							<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
+								⏳ {projectDetails.in_progress_count} In Progress
+							</span>
+							<span className="px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
+								✅ {projectDetails.done_count} Done
+							</span>
+							<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
+								👥 {projectDetails.member_count} Members
+							</span>
+						</div>
+					</div>
+
+					{isOwner && (
+						<button
+							onClick={handleDeleteProject}
+							className="text-red-500 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm"
+						>
+							Delete
+						</button>
+					)}
+				</div>
+
+				<div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
+					<MemberPanel
+						members={members}
+						isOwner={isOwner}
+						projectId={projectId}
+						baseUrl={BASE_URL}
+						onMemberAdded={refetchMembers}
+					/>
+
+					<TaskPanel
+						tasks={tasks}
+						members={members}
+						canCreateTask={!!canCreateTask}
+						projectId={projectId}
+						baseUrl={BASE_URL}
+						onTaskAdded={upsertTask}
+					/>
+				</div>
 			</div>
-
-
-			{/* Members + Tasks Grid */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-				{/* Members */}
-				<MemberPanel
-					members={members}
-					isOwner={isOwner}
-					projectId={projectId}
-					baseUrl={BASE_URL}
-					onMemberAdded={refetchMembers}
-				/>
-
-				{/* Tasks */}
-				<TaskPanel
-					tasks={tasks}
-					members={members}
-					canCreateTask={!!canCreateTask}
-					projectId={projectId}
-					baseUrl={BASE_URL}
-					onTaskAdded={upsertTask}
-				/>
-
-			</div>
-
 		</div>
 	);
 }

@@ -189,36 +189,73 @@ export default function DashboardPage() {
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
 						{projects.map((p) => (
-							<div
+							<Link
 								key={p.id}
-								className="bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition"
+								href={`/projects/${p.id}`}
+								className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
 							>
-								{/* Title */}
-								<div className="text-lg font-semibold">{p.title}</div>
+								{/* Header */}
+								<div className="flex items-start justify-between gap-3">
+									<div className="min-w-0">
+										<h2 className="truncate text-xl font-semibold text-gray-900 group-hover:text-blue-600">
+											{p.title}
+										</h2>
 
-								{/* Role */}
-								<div className="text-sm text-gray-500 mt-1">
-									Role: {p.my_role ? p.my_role : "owner"}
+										<p className="mt-1 text-sm text-gray-500">
+											{p.member_count} member{p.member_count !== 1 ? "s" : ""}
+										</p>
+									</div>
+
+									<span
+										className={
+											p.my_role === "viewer"
+												? "shrink-0 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
+												: p.my_role === "editor"
+													? "shrink-0 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700"
+													: p.my_role === "guide"
+														? "shrink-0 rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700"
+														: "shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+										}
+									>
+										{p.my_role ?? "owner"}
+									</span>
 								</div>
 
 								{/* Stats */}
-								<div className="mt-3 text-sm text-gray-700 space-y-1">
-									<div>Members: {p.member_count ?? 0}</div>
-									<div>Todo: {p.todo_count ?? 0}</div>
-									<div>In Progress: {p.in_progress_count ?? 0}</div>
-									<div>Done: {p.done_count ?? 0}</div>
+								<div className="mt-5 grid grid-cols-3 gap-3">
+									<div className="rounded-xl bg-gray-50 p-3">
+										<p className="text-xs text-gray-500">Todo</p>
+										<p className="mt-1 text-lg font-semibold text-gray-900">
+											{p.todo_count}
+										</p>
+									</div>
+
+									<div className="rounded-xl bg-yellow-50 p-3">
+										<p className="text-xs text-yellow-700">Progress</p>
+										<p className="mt-1 text-lg font-semibold text-yellow-800">
+											{p.in_progress_count}
+										</p>
+									</div>
+
+									<div className="rounded-xl bg-green-50 p-3">
+										<p className="text-xs text-green-700">Done</p>
+										<p className="mt-1 text-lg font-semibold text-green-800">
+											{p.done_count}
+										</p>
+									</div>
 								</div>
 
-								{/* Action */}
-								<div className="mt-4">
-									<Link
-										href={`/projects/${p.id}`}
-										className="text-blue-600 text-sm hover:underline"
-									>
-										Open Project →
-									</Link>
+								{/* Footer */}
+								<div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-4">
+									<span className="text-sm font-medium text-blue-600 group-hover:underline">
+										Open project
+									</span>
+
+									<span className="text-lg text-blue-500 transition group-hover:translate-x-1">
+										→
+									</span>
 								</div>
-							</div>
+							</Link>
 						))}
 
 					</div>
