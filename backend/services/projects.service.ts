@@ -100,7 +100,27 @@ export const createProjectMember = async (data: {
 
 export const getProjectMembers = async (project_id: number): Promise<Array<{ id: number; email: string; role: ProjectRole }>> => {
 	const result = await pool.query(
-		'SELECT u.id, u.email, pm.role FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id=$1',
+		`
+		SELECT 
+			u.id,
+			u.email,
+			'owner' AS role
+		FROM projects p
+		JOIN users u ON u.id = p.owner_id
+		WHERE p.id = $1
+
+		UNION ALL
+
+		SELECT 
+			u.id,
+			u.email,
+			pm.role
+		FROM project_members pm
+		JOIN users u ON u.id = pm.user_id
+		WHERE pm.project_id = $1
+
+		ORDER BY role
+		`,
 		[project_id]
 	);
 	return result.rows;

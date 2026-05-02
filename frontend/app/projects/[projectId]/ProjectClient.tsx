@@ -24,7 +24,9 @@ type Task = {
 	title: string;
 	description: string | null;
 	project_id: number;
+	assigned_to: number | null;
 	assigned_to_name: string | null;
+	assigned_to_email: string | null;
 	status: TaskStatus;
 	deadline: string | null;
 };
@@ -54,6 +56,9 @@ type TaskStatusBody = {
 	status: TaskStatus;
 }
 
+type AssignedToBody = {
+	assigned_to: number | null,
+}
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
 const getAuthHeaders = (): HeadersInit => {
@@ -69,7 +74,7 @@ const getAuthHeaders = (): HeadersInit => {
 const apiFetch = (
 	method: "GET" | "POST" | "PATCH",
 	url: string,
-	body?: TaskBody | MemberBody | TaskStatusBody,
+	body?: TaskBody | MemberBody | TaskStatusBody | AssignedToBody,
 ) =>
 	fetch(url, {
 		method,
@@ -252,6 +257,8 @@ function TaskPanel({
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	const [editingAssigneeTaskId, setEditingAssigneeTaskId] = useState<number | null>(null);
+
 	// ─── Drag State ────────────────────────────────────────────
 	const [draggedTask, setDraggedTask] = useState<Task | null>(null);
 
@@ -309,10 +316,11 @@ function TaskPanel({
 
 			const enrichedTask: Task = {
 				...data.data,
-				assigned_to_name: assignedTo
-					? (members.find((m) => m.id === assignedTo)?.email ?? null)
-					: null,
-			}
+				assigned_to: assignedTo || data.data.assigned_to || null,
+				assigned_to_email: assignedTo
+					? members.find((m) => m.id === assignedTo)?.email ?? null
+					: data.data.assigned_to_email ?? null,
+			};
 
 			onTaskAdded(enrichedTask);
 
@@ -350,6 +358,34 @@ function TaskPanel({
 		return acc;
 	}, {} as Record<TaskStatus, Task[]>);
 
+	const handleAssign = async (task: Task, userId: number | null) => {
+		try {
+			const res = await apiFetch(
+				"PATCH",
+				`${baseUrl}/projects/${projectId}/tasks/${task.id}/assign`,
+				{ assigned_to: userId }
+			)
+			if (!res.ok) throw new Error("Assign failed");
+
+			const data = await res.json();
+
+			const updatedTask: Task = {
+				...task,
+				...data.data,
+				assigned_to: userId,
+				assigned_to_email: userId
+					? members.find((m) => m.id === userId)?.email ?? null
+					: null,
+			};
+
+			onTaskAdded(updatedTask);
+			setEditingAssigneeTaskId(null);
+		} catch {
+			setError("Failed to assign task")
+		}
+
+
+	}
 	// ─── UI ─────────────────────────────────────────────────────
 	return (
 		<div className="flex-1 bg-white shadow rounded-xl p-4">
@@ -475,8 +511,46 @@ function TaskPanel({
 									>
 										<div className="font-medium">{task.title}</div>
 
-										<div className="flex justify-between text-xs text-gray-500">
-											<span>{task.assigned_to_name || "Unassigned"}</span>
+										<div className="flex justify-between items-center text-xs text-gray-500 gap-2">
+
+											<div>
+												{editingAssigneeTaskId === task.id ? (
+													<select
+														autoFocus
+														value={task.assigned_to ?? ""}
+														onChange={async (e) => {
+															const userId = e.target.value
+																? Number(e.target.value)
+																: null;
+
+															await handleAssign(task, userId);
+														}}
+														onBlur={() => setEditingAssigneeTaskId(null)}
+														className="border rounded px-2 py-1 text-xs bg-white"
+													>
+														<option value="">Unassigned</option>
+														{members.map((m) => (
+															<option key={m.id} value={m.id}>
+																{m.email}
+															</option>
+														))}
+													</select>
+												) : (
+													<button
+														type="button"
+														onClick={() => setEditingAssigneeTaskId(task.id)}
+														className={
+															task.assigned_to
+																? "px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
+																: "px-2 py-1 rounded-full bg-gray-100 text-gray-500 border hover:bg-gray-200"
+														}
+													>
+														{task.assigned_to_email ?? "Unassigned"}
+													</button>
+												)}
+											</div>
+
+											{/* Deadline */}
 											{task.deadline && <span>{task.deadline}</span>}
 										</div>
 									</div>
@@ -587,6 +661,28 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 		});
 	};
 
+	const handleDeleteProject = async () => {
+		const ok = window.confirm("Delete this project? This cannot be undone.");
+		if (!ok) return;
+
+		try {
+			const res = await fetch(
+				`${BASE_URL}/projects/${projectId}`,
+				{
+					method: "DELETE",
+					headers: getAuthHeaders(),
+				}
+			)
+
+			if (!res.ok) throw new Error("Delete failed");
+
+			router.replace("/dashboard");
+
+		} catch {
+			setError("Failed to delete project")
+		}
+	}
+
 	return (
 		<div className="p-6 max-w-6xl mx-auto space-y-6">
 
@@ -600,25 +696,47 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 				</button>
 			</div>
 
-			{/* Project Summary (Full Width) */}
-			<div className="bg-white shadow rounded-xl p-6">
-				<h2 className="text-xl font-semibold mb-3">{projectDetails.title}</h2>
+			{/* Project Summary */}
+			<div className="bg-white shadow rounded-2xl p-6 flex justify-between items-center">
 
-				<div className="flex flex-wrap gap-3 text-sm">
-					<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600">
-						Todo: {projectDetails.todo_count}
-					</span>
-					<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700">
-						In Progress: {projectDetails.in_progress_count}
-					</span>
-					<span className="px-3 py-1 rounded-full bg-green-100 text-green-700">
-						Done: {projectDetails.done_count}
-					</span>
-					<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700">
-						Members: {projectDetails.member_count}
-					</span>
+				{/* Left Section */}
+				<div className="space-y-3">
+					{/* Title */}
+					<h2 className="text-2xl font-semibold text-gray-800">
+						{projectDetails.title}
+					</h2>
+
+					{/* Stats */}
+					<div className="flex flex-wrap gap-2 text-sm">
+						<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
+							📝 {projectDetails.todo_count} Todo
+						</span>
+						<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
+							⏳ {projectDetails.in_progress_count} In Progress
+						</span>
+						<span className="px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
+							✅ {projectDetails.done_count} Done
+						</span>
+						<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
+							👥 {projectDetails.member_count} Members
+						</span>
+
+					</div>
+
 				</div>
+
+				{/* Right Section */}
+				{isOwner && (
+					<button
+						onClick={handleDeleteProject}
+						className="text-red-500 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm"
+					>
+						Delete
+					</button>
+				)}
+
 			</div>
+
 
 			{/* Members + Tasks Grid */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

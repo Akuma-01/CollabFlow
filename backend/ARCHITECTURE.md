@@ -68,3 +68,10 @@ Ownership is a property of the project itself. Storing it in `project_members`
 would duplicate the fact across two tables, creating risk of update anomalies 
 where the two sources contradict each other. The `hasRole` middleware handles 
 this by checking `project.owner_id` before querying `project_members`.
+
+## Known Constraints and Future Improvements
+- Students (non-guide members) should be restricted to one active project 
+  at a time, matching real university policy. Currently not enforced.
+- Faculty guides can supervise multiple projects.
+- Future: add project status (active/archived) and enforce single-project 
+  constraint per student on active projects.

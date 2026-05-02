@@ -1,5 +1,3 @@
-import { error } from 'console';
-import { isDataView } from 'util/types';
 import pool from '../config/db';
 import { Task, TaskStatus } from '../types';
 import { isGuide, isProjectOwner, isUserMember } from './projects.service';
@@ -29,13 +27,17 @@ export const getProjectTasks = async (
       t.title, 
       t.description, 
       t.project_id, 
+	  t.assigned_to,
+	  u.email AS assigned_to_email,
       u.name AS assigned_to_name, 
-      t.status 
+      t.status,
+	  t.deadline
     FROM tasks t 
     LEFT JOIN users u ON t.assigned_to = u.id 
     WHERE t.project_id = $1 
     AND ($2::int IS NULL OR t.assigned_to = $2)
-    AND ($3::text IS NULL OR t.status = $3)`,
+    AND ($3::text IS NULL OR t.status = $3)
+	ORDER BY t.id ASC`,
 		[project_id, assigned_to, status]
 	);
 	return result.rows;
@@ -56,11 +58,19 @@ export const assignTask = async (
 		throw { status: 403, message: 'Task does not belong to this project' };
 	}
 
-	const taskData: Task = task.rows[0];
+	// unassign task
+	if (assigned_to === null) {
+		const updateResult = await pool.query(
+			'UPDATE tasks SET assigned_to = NULL WHERE id = $1 AND project_id = $2 RETURNING *',
+			[task_id, project_id]
+		);
 
-	const isOwner = await isProjectOwner(taskData.project_id, assigned_to);
-	const isMember = await isUserMember(taskData.project_id, assigned_to);
-	const assigneeIsGuide = await isGuide(taskData.project_id, assigned_to);
+		return updateResult.rows[0];
+	}
+
+	const isOwner = await isProjectOwner(project_id, assigned_to);
+	const isMember = await isUserMember(project_id, assigned_to);
+	const assigneeIsGuide = await isGuide(project_id, assigned_to);
 
 	if (assigneeIsGuide) {
 		throw { status: 403, message: 'Cannot assign task to a guide' };
@@ -71,8 +81,8 @@ export const assignTask = async (
 	}
 
 	const updateResult = await pool.query(
-		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 RETURNING *',
-		[assigned_to, task_id]
+		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 AND project_id = $3 RETURNING *',
+		[assigned_to, task_id, project_id]
 	);
 	return updateResult.rows[0];
 };

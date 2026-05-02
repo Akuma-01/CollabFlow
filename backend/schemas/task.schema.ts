@@ -15,7 +15,7 @@ export const updateTaskSchema = z.object({
 });
 
 export const assignTaskSchema = z.object({
-	assigned_to: z.number(),
+	assigned_to: z.number().nullable(),
 })
 
 export const updateTaskStatusSchema = z.object({
