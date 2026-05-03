@@ -11,9 +11,10 @@ import userRoutes from './routes/users.routes';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(cors({
-	origin: "http://localhost:3001",
-	methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+	origin: process.env.FRONTEND_URL || "http://localhost:3001",
+	methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 	credentials: true
 }));
 

@@ -39,7 +39,7 @@ export default function DashboardPage() {
 			setLoading(true);
 
 			try {
-				const res = await fetch("http://localhost:3000/dashboard", {
+				const res = await fetch(`${BASE_URL}/dashboard`, {
 					method: "GET",
 					headers: {
 						"Content-Type": "application/json",
