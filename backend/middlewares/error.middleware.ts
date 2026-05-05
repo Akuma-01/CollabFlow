@@ -1,44 +1,31 @@
 import { NextFunction, Request, Response } from 'express';
-import { AppError } from '../types';
+import { AppError } from '../utils/AppError';
 
+const PG_ERRORS: Record<string, { status: number; message: string }> = {
+	'23503': { status: 400, message: 'Cannot perform this action due to existing dependencies' },
+	'23514': { status: 400, message: 'Invalid status value' },
+	'23505': { status: 409, message: 'This record already exists' },
+	'22P02': { status: 400, message: 'A number was expected but not provided' },
+};
 
 const errorMiddleware = (err: AppError, req: Request, res: Response, next: NextFunction): void => {
-	if (err.code === "23503") {
-		res.status(400).json({
-			success: false,
-			message: "Cannot perform this action due to existing dependencies"
-		});
+	// PostgreSQL error codes
+	if (err && typeof err === 'object' && 'code' in err) {
+		const pgErr = PG_ERRORS[(err as { code: string }).code];
+		if (pgErr) {
+			res.status(pgErr.status).json({ success: false, message: pgErr.message });
+			return;
+		}
+	}
+
+	// Known application errors
+	if (err instanceof AppError) {
+		res.status(err.status).json({ success: false, message: err.message });
 		return;
 	}
 
-	if (err.code === "23514") {
-		res.status(400).json({
-			success: false,
-			message: "Invalid status value"
-		});
-		return;
-	}
-
-	if (err.code === "23505") {
-		res.status(400).json({
-			success: false,
-			message: "This record already exists"
-		});
-		return;
-	}
-
-	if (err.code === "22P02") {
-		res.status(400).json({
-			success: false,
-			message: "Number is expected"
-		});
-		return;
-	}
-
-	res.status(err.status || 500).json({
-		success: false,
-		message: err.message || "Internal Server Error"
-	});
+	console.error('Unhandled error:', err);
+	res.status(500).json({ success: false, message: 'Internal Server Error' });
 };
 
 export default errorMiddleware;

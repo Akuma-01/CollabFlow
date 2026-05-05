@@ -44,6 +44,7 @@ declare global {
 			user: {
 				id: number;
 				email: string;
+				name: string;
 			};
 		}
 	}
