@@ -1,39 +1,41 @@
 import { NextFunction, Request, Response } from 'express';
-import {isUser} from '../services/projects.service';
 import jwt from 'jsonwebtoken';
+import { isUser } from '../services/projects.service';
+import { AppError } from '../utils/AppError';
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const authHeader = req.headers.authorization;
+		let token: string | undefined = req.cookies?.token;
 
-		if (!authHeader) {
-			return next({ status: 401, message: "No token provided" });
+		if (!token) {
+			const authHeader = req.headers.authorization;
+			if (authHeader) {
+				const parts = authHeader.split(' ');
+				if (parts.length === 2 && parts[0] === 'Bearer') {
+					token = parts[1];
+				}
+			}
 		}
 
-		// extract bearer token
-		const parts = authHeader.split(" ");
-
-		if (parts.length != 2 || parts[0] !== "Bearer") {
-			return next({ status: 401, message: "Invalid token format" })
+		if (!token) {
+			return next(new AppError('No token provided', 401));
 		}
-
-		const token = parts[1];
 
 		// verufy token
 		const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
 			id: number;
 			email: string;
+			name: string;
 		};
-		
+
 		if (!(await isUser(decoded.id))) {
-			return next({status: 401, message: "User no longer exists"});
+			return next(new AppError('User no longer exists', 401));
 		}
 		// attach decoded user to req.user
 		req.user = decoded;
-
 		next();
 	} catch (err) {
-		return next({ status: 401, message: "Invalid or expired token" })
+		return next(new AppError('Invalid or expired token', 401))
 	}
 }
 
