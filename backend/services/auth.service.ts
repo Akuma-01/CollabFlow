@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool from '../config/db';
 import { User } from '../types';
+import { AppError } from '../utils/AppError';
 
 export const registerUser = async (
 	name: string,
@@ -11,7 +12,7 @@ export const registerUser = async (
 	const existing = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
 
 	if (existing.rows.length > 0) {
-		throw { status: 400, message: "Email already exists" };
+		throw new AppError('Email already exists', 400);
 	}
 
 	const hashedPassword = await bcrypt.hash(password, 10);
@@ -42,7 +43,7 @@ export const loginUser = async (
 	);
 
 	if (result.rows.length === 0) {
-		throw { status: 400, message: "Invalid email" };
+		throw new AppError('Invalid email or password', 400);
 	}
 
 	const user = result.rows[0];
@@ -50,11 +51,11 @@ export const loginUser = async (
 	const isMatch = await bcrypt.compare(password, user.password as string);
 
 	if (!isMatch) {
-		throw { status: 400, message: "Invalid password" };
+		throw new AppError('Invalid email or password', 400);
 	}
 
 	const token = jwt.sign(
-		{ id: user.id, email: user.email },
+		{ id: user.id, email: user.email, name: user.name },
 		process.env.JWT_SECRET as string,
 		{ expiresIn: "1h" }
 	);

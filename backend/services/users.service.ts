@@ -6,6 +6,11 @@ export const getAllUsers = async (): Promise<User[]> => {
 	return result.rows;
 };
 
+export const isUser = async (user_id: number): Promise<boolean> => {
+	const result = await pool.query('SELECT 1 FROM users WHERE id = $1', [user_id]);
+	return result.rows.length > 0;
+};
+
 /*	WITHOUT USING DB
 
 	let users = [];

@@ -1,6 +1,6 @@
 import pool from '../config/db';
 import { Task, TaskStatus } from '../types';
-import { isGuide, isProjectOwner, isUserMember } from './projects.service';
+import { AppError } from '../utils/AppError';
 
 export const createTask = async (
 	title: string,
@@ -35,8 +35,8 @@ export const getProjectTasks = async (
     FROM tasks t 
     LEFT JOIN users u ON t.assigned_to = u.id 
     WHERE t.project_id = $1 
-    AND ($2::int IS NULL OR t.assigned_to = $2)
-    AND ($3::text IS NULL OR t.status = $3)
+		AND ($2::int IS NULL OR t.assigned_to = $2)
+		AND ($3::text IS NULL OR t.status = $3)
 	ORDER BY t.id ASC`,
 		[project_id, assigned_to, status]
 	);
@@ -48,43 +48,53 @@ export const assignTask = async (
 	project_id: number,
 	assigned_to: number
 ): Promise<Task> => {
-	const task = await pool.query('SELECT * FROM tasks WHERE id = $1', [task_id]);
+	const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1 AND project_id = $2', [task_id, project_id]);
 
-	if (task.rows.length === 0) {
-		throw { status: 404, message: 'Task not found' };
-	}
-
-	if (task.rows[0].project_id !== project_id) {
-		throw { status: 403, message: 'Task does not belong to this project' };
+	if (taskResult.rows.length === 0) {
+		throw new AppError('Task not found or does not belong to this project', 404);
 	}
 
 	// unassign task
 	if (assigned_to === null) {
-		const updateResult = await pool.query(
+		const result = await pool.query(
 			'UPDATE tasks SET assigned_to = NULL WHERE id = $1 AND project_id = $2 RETURNING *',
 			[task_id, project_id]
 		);
 
-		return updateResult.rows[0];
+		return result.rows[0];
 	}
 
-	const isOwner = await isProjectOwner(project_id, assigned_to);
-	const isMember = await isUserMember(project_id, assigned_to);
-	const assigneeIsGuide = await isGuide(project_id, assigned_to);
+	const memberResult = await pool.query(
+		`SELECT p.owner_id, pm.role AS member_role
+		 FROM projects p
+		 LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
+		 WHERE p.id = $1`,
+		[project_id, assigned_to]
+	);
 
-	if (assigneeIsGuide) {
-		throw { status: 403, message: 'Cannot assign task to a guide' };
+	if (memberResult.rows.length === 0) {
+		throw new AppError('Project not found', 404);
+	}
+
+	const { owner_id, member_role } = memberResult.rows[0];
+	const isOwner = owner_id === assigned_to;
+	const isGuide = member_role === 'guide';
+	const isMember = member_role !== null;
+
+
+	if (isGuide) {
+		throw new AppError('Cannot assign task to a guide', 403);
 	}
 
 	if (!isOwner && !isMember) {
-		throw { status: 403, message: 'User is not a member of this project' };
+		throw new AppError('User is not a member of this project', 403);
 	}
 
-	const updateResult = await pool.query(
+	const result = await pool.query(
 		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 AND project_id = $3 RETURNING *',
 		[assigned_to, task_id, project_id]
 	);
-	return updateResult.rows[0];
+	return result.rows[0];
 };
 
 export const updateTaskStatus = async (task_id: number, status: TaskStatus): Promise<Task> => {
@@ -92,19 +102,22 @@ export const updateTaskStatus = async (task_id: number, status: TaskStatus): Pro
 		'UPDATE tasks SET status=$1 WHERE id=$2 RETURNING *',
 		[status, task_id]
 	);
+	if (result.rowCount === 0) {
+		throw new AppError('Task not found', 404);
+	}
 	return result.rows[0];
 };
 
 export const updateTask = async (task_id: number, project_id: number, title?: string, description?: string, deadline?: string): Promise<Task | undefined> => {
 	const fields: string[] = [];
-	const values: any[] = [];
+	const values: unknown[] = [];
 	let index = 1;
 
-	if (title) {
+	if (title !== undefined) {
 		fields.push(`title = $${index++}`);
 		values.push(title);
 	}
-	if (description) {
+	if (description !== undefined) {
 		fields.push(`description = $${index++}`);
 		values.push(description);
 	}
@@ -113,7 +126,7 @@ export const updateTask = async (task_id: number, project_id: number, title?: st
 		values.push(deadline);
 	}
 	if (fields.length === 0) {
-		throw { status: 400, message: "No update data provided" };
+		throw new AppError('No update data provided', 400);
 	}
 
 	values.push(task_id, project_id);
@@ -126,10 +139,11 @@ export const updateTask = async (task_id: number, project_id: number, title?: st
 }
 
 export const deleteTask = async (task_id: number, project_id: number): Promise<Task | undefined> => {
-	const result = await pool.query("DELETE FROM tasks WHERE id = $1 AND project_id = $2 RETURNING *", [task_id, project_id]);
+	const result = await pool.query(
+		"DELETE FROM tasks WHERE id = $1 AND project_id = $2 RETURNING *", [task_id, project_id]);
 
 	if (result.rowCount === 0) {
-		throw { status: 404, message: "Task not found" }
+		throw new AppError('Task not found', 404);
 	}
 	return result.rows[0];
 }
