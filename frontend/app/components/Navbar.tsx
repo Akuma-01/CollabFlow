@@ -1,5 +1,6 @@
 "use client";
 
+import { api } from "@/lib/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -7,29 +8,25 @@ export default function Navbar() {
 	const router = useRouter();
 	const pathname = usePathname();
 
-	const handleLogout = () => {
-		localStorage.removeItem("token");
-		localStorage.removeItem("user_id");
+	if (pathname === "/login" || pathname === "/register") return null;
+
+	const handleLogout = async () => {
+		await api.post("/auth/logout").catch(() => { });
 		router.replace("/login");
 	};
-
-	if (pathname === "/login" || pathname === "/register") {
-		return null;
-	}
 
 	const isActive = (path: string) => pathname === path;
 
 	return (
-		<header className="sticky top-0 z-50 w-full border-b bg-white/90 backdrop-blur">
-			<nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+		<header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-backdrop-filter:bg-white/80">
+			<nav className="mx-auto flex max-w-7xl items-center justify-between px-6 h-14">
 				{/* Left */}
-				<div className="flex items-center gap-8">
-					<Link href="/dashboard" className="flex items-center gap-2">
-						<div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm">
+				<div className="flex items-center gap-6">
+					<Link href="/dashboard" className="flex items-center gap-2.5">
+						<div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-xs font-bold text-white shadow-sm">
 							CF
 						</div>
-
-						<span className="text-lg font-semibold tracking-tight text-gray-900">
+						<span className="text-sm font-semibold tracking-tight text-gray-900">
 							CollabFlow
 						</span>
 					</Link>
@@ -39,8 +36,8 @@ export default function Navbar() {
 							href="/dashboard"
 							className={
 								isActive("/dashboard")
-									? "rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700"
-									: "rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+									? "rounded-md bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700"
+									: "rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
 							}
 						>
 							Dashboard
@@ -49,14 +46,12 @@ export default function Navbar() {
 				</div>
 
 				{/* Right */}
-				<div className="flex items-center gap-3">
-					<button
-						onClick={handleLogout}
-						className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700"
-					>
-						Logout
-					</button>
-				</div>
+				<button
+					onClick={handleLogout}
+					className="rounded-lg border border-gray-200 px-3.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+				>
+					Sign out
+				</button>
 			</nav>
 		</header>
 	);

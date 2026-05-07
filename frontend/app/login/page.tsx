@@ -1,5 +1,6 @@
 "use client"
 
+import { ApiError, api } from "@/lib/api"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -14,81 +15,85 @@ export default function LoginPage() {
 
 	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault()
-
+		setError("");
 		setLoading(true);
 
 		try {
-			const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ email, password })
-			})
-
-			const data = await response.json()
-			if (!response.ok) {
-				throw new Error(data.message || "Login failed");
-			}
-
-			// optional: store token
-			localStorage.setItem("token", data.data.token);
-			localStorage.setItem("user_id", data.data.user.id);
-
+			await api.post("/auth/login", { email, password });
 			router.push("/dashboard")
 		} catch (err) {
-			console.error(err)
-			setError(err instanceof Error ? err.message : "Something went wrong");
+			setError(err instanceof ApiError ? err.message : "Something went wrong");
 		} finally {
 			setLoading(false);
 		}
 	}
 
 	return (
-		<div className="min-h-screen bg-gray-200 flex items-center justify-center">
-			<div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+		<div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center px-4">
+			<div className="w-full max-w-md">
+				{/* Logo */}
+				<div className="text-center mb-8">
+					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white text-xl font-bold shadow-lg mb-4">
+						CF
+					</div>
+					<h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+					<p className="text-gray-500 text-sm mt-1">Sign in to your CollabFlow account</p>
+				</div>
 
-				<h1 className="text-2xl font-bold text-center mb-6 text-blue-600">
-					CollabFlow
-				</h1>
+				<div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+					{error && (
+						<div className="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+							<span>⚠</span>
+							{error}
+						</div>
+					)}
 
-				<form onSubmit={handleSubmit} className="flex flex-col gap-4">
+					<form onSubmit={handleSubmit} className="space-y-4">
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1.5">
+								Email
+							</label>
+							<input
+								type="email"
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								className="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+								placeholder="you@example.com"
+								required
+							/>
+						</div>
 
-					{error && <p className="text-red-500 text-sm">{error}</p>}
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-1.5">
+								Password
+							</label>
+							<input
+								type="password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								className="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+								placeholder="••••••••"
+								required
+							/>
+						</div>
 
-					<input
-						type="email"
-						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-						value={email}
-						onChange={e => setEmail(e.target.value)}
-						placeholder="Email"
-						required
-					/>
+						<button
+							type="submit"
+							disabled={loading}
+							className="w-full mt-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+						>
+							{loading ? "Signing in…" : "Sign in"}
+						</button>
+					</form>
 
-					<input
-						type="password"
-						className="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-						value={password}
-						onChange={e => setPassword(e.target.value)}
-						placeholder="Password"
-						required
-					/>
-
-					<button
-						type="submit"
-						disabled={loading}
-						className="bg-blue-600 text-white rounded-lg p-3 hover:bg-blue-700 disabled:opacity-50"
-					>
-						{loading ? "Logging In..." : "Login"}
-					</button>
-
-					<p className="text-sm text-center">
+					<p className="text-center text-sm text-gray-500 mt-6">
 						Don&apos;t have an account?{" "}
-						<Link href="/register" className="text-blue-600 hover:underline">
-							Register
+						<Link href="/register" className="text-blue-600 font-medium hover:underline">
+							Create one
 						</Link>
 					</p>
-
-				</form>
+				</div>
 			</div>
 		</div>
-	)
+	);
 }
