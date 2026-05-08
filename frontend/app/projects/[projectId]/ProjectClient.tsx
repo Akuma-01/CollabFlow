@@ -1,115 +1,61 @@
 "use client"
 
+import { api, ApiError } from "@/lib/api";
+import { Member, Project, Task, TaskStatus } from "@/lib/types";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+// Helpers ──────────────────────────────────────────────────────────────
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Project = {
-	id: number;
-	title: string;
-	owner_id: number;
-	member_count: number;
-	task_count: number;
-	todo_count: number;
-	in_progress_count: number;
-	done_count: number;
+const ROLE_PILL: Record<string, string> = {
+	owner: "bg-blue-50 text-blue-700",
+	editor: "bg-green-50 text-green-700",
+	viewer: "bg-gray-100 text-gray-600",
+	guide: "bg-purple-50 text-purple-700",
 };
 
-type TaskStatus = "todo" | "in_progress" | "done";
+const STATUS_COL = {
+	todo: { label: "Todo", bg: "bg-gray-50", dot: "bg-gray-400", count: "text-gray-500" },
+	in_progress: { label: "In Progress", bg: "bg-amber-50", dot: "bg-amber-400", count: "text-amber-600" },
+	done: { label: "Done", bg: "bg-green-50", dot: "bg-green-500", count: "text-green-600" },
+} satisfies Record<TaskStatus, { label: string; bg: string; dot: string; count: string }>;
 
-type Task = {
-	id: number;
-	title: string;
-	description: string | null;
-	project_id: number;
-	assigned_to: number | null;
-	assigned_to_name: string | null;
-	assigned_to_email: string | null;
-	status: TaskStatus;
-	deadline: string | null;
-};
+const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "done"];
 
-type ProjectRole = "editor" | "viewer" | "guide" | "owner";
-
-type Member = {
-	id: number;
-	email: string;
-	role: ProjectRole;
-};
-
-type TaskBody = {
-	title: string;
-	description: string | null;
-	assigned_to: number | null;
-	status: TaskStatus;
-	deadline: string | null;
-};
-
-type MemberBody = {
-	user_id: number;
-	role: ProjectRole;
-};
-
-type TaskStatusBody = {
-	status: TaskStatus;
+function fmtDate(d: string) {
+	return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-type AssignedToBody = {
-	assigned_to: number | null,
+function isOverdue(deadline: string | null, status: TaskStatus) {
+	if (!deadline || status === "done") return false;
+	return new Date(deadline) < new Date(new Date().toDateString());
 }
-// ─── API Helpers ──────────────────────────────────────────────────────────────
-
-const getAuthHeaders = (): HeadersInit => {
-	const token = localStorage.getItem("token");
-	if (!token) throw new Error("No token")
-
-	return {
-		"Content-Type": "application/json",
-		Authorization: `Bearer ${token}`
-	};
-};
-
-const apiFetch = (
-	method: "GET" | "POST" | "PATCH",
-	url: string,
-	body?: TaskBody | MemberBody | TaskStatusBody | AssignedToBody,
-) =>
-	fetch(url, {
-		method,
-		headers: getAuthHeaders(),
-		...(body ? { body: JSON.stringify(body) } : {}),
-	});
-
-
 
 // ─── MemberPanel ──────────────────────────────────────────────────────────────
-
-type MemberPanelProps = {
-	members: Member[];
-	isOwner: boolean;
-	projectId: string;
-	baseUrl: string;
-	onMemberAdded: () => Promise<void>;
-};
 
 function MemberPanel({
 	members,
 	isOwner,
 	projectId,
-	baseUrl,
-	onMemberAdded,
-}: MemberPanelProps) {
+	onMembersChanged,
+}: {
+	members: Member[];
+	isOwner: boolean;
+	projectId: string;
+	onMembersChanged: () => Promise<void>;
+}) {
 	const [showForm, setShowForm] = useState(false);
 	const [userId, setUserId] = useState<number | "">("")
-	const [role, setRole] = useState<ProjectRole | "">("");
+	const [role, setRole] = useState<"editor" | "viewer" | "guide" | "">("");
+
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 
-	const projectRoles: ProjectRole[] = ["editor", "viewer", "guide"];
+	useEffect(() => { if (showForm) inputRef.current?.focus(); }, [showForm]);
 
-	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+	const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!userId || !role) return;
 
@@ -117,660 +63,566 @@ function MemberPanel({
 		setError(null);
 
 		try {
-			const res = await apiFetch(
-				"POST",
-				`${baseUrl}/projects/${projectId}/members`,
-				{ user_id: userId as number, role: role as ProjectRole }
-			);
+			await api.post(`/projects/${projectId}/members`, { user_id: userId, role });
 
-			if (!res.ok) throw new Error("Member addition failed");
-
-			await onMemberAdded();
+			await onMembersChanged();
 			setUserId("");
 			setRole("");
 			setShowForm(false);
 
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Member addition failed");
+			setError(err instanceof ApiError ? err.message : "Failed to add member");
 		} finally {
 			setSubmitting(false);
 		}
 	}
 
-	const handleCancel = () => {
-		setShowForm(false);
-		setError(null);
-	}
-
 	return (
-		<div className="flex-1 bg-white shadow rounded-xl p-4">
-			<h2 className="text-lg font-semibold mb-3">Members</h2>
-
-			{error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-
-			{showForm && (
-				<form
-					onSubmit={handleSubmit}
-					className="mb-3 border p-3 rounded bg-gray-50 flex flex-col gap-2"
-				>
-					<input
-						required
-						type="number"
-						placeholder="User ID"
-						value={userId}
-						onChange={(e) => setUserId(e.target.value ? Number(e.target.value) : "")}
-					/>
-
-					<select
-						required
-						value={role}
-						onChange={(e) => setRole(e.target.value as ProjectRole | "")}
-						className="border p-2 rounded"
+		<aside className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-fit">
+			{/* Header */}
+			<div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+				<div>
+					<h2 className="font-semibold text-gray-900 text-sm">Team</h2>
+					<p className="text-xs text-gray-400 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
+				</div>
+				{isOwner && !showForm && (
+					<button
+						onClick={() => setShowForm(true)}
+						className="text-xs font-medium text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition"
 					>
-						<option value="" disabled>Select role</option>
-						{projectRoles.map((r) => (
-							<option key={r} value={r}>
-								{r}
-							</option>
-						))}
-					</select>
-
-					<div className="flex gap-2">
-						<button
-							type="submit"
-							disabled={submitting}
-							className="bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50"
-						>
-							{submitting ? "Adding..." : "Add"}
-						</button>
-
-						<button
-							type="button"
-							onClick={handleCancel}
-							className="text-gray-500"
-						>
-							Cancel
-						</button>
-					</div>
-
-				</form>
-			)}
-
-
-
-			{/* Members */}
-			<div className="space-y-2 mb-3">
-				{members.length === 0 ? (
-					<p className="text-sm text-gray-400">No members yet.</p>
-				) : (
-					<>
-						{members.map((member) => (
-							<div
-								key={member.id}
-								className="flex justify-between items-center text-sm border-b pb-2 gap-3"
-							>
-								<span className="truncate min-w-0">{member.email}</span>
-
-								<span
-									className={
-										member.role === "owner"
-											? "text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 shrink-0"
-											: member.role === "editor"
-												? "text-xs px-2 py-1 rounded-full bg-green-50 text-green-700 shrink-0"
-												: member.role === "guide"
-													? "text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 shrink-0"
-													: "text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0"
-									}
-								>
-									{member.role}
-								</span>
-							</div>
-						))}
-					</>
+						+ Add
+					</button>
 				)}
 			</div>
 
-			{isOwner && (
-				<button
-					onClick={() => setShowForm(true)}
-					className="bg-blue-500 text-white px-3 py-1 rounded">
-					+ Add
-				</button>
+			{showForm && (
+				<div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+					{error && <p className="text-xs text-red-600 mb-2">{error}</p>}
+					<form onSubmit={handleAdd} className="space-y-2">
+						<input
+							ref={inputRef}
+							required
+							type="number"
+							placeholder="User ID"
+							value={userId}
+							onChange={(e) => setUserId(e.target.value ? Number(e.target.value) : "")}
+							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						/>
+						<select
+							required
+							value={role}
+							onChange={(e) => setRole(e.target.value as typeof role)}
+							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						>
+							<option value="" disabled>Select role</option>
+							<option value="editor">Editor</option>
+							<option value="viewer">Viewer</option>
+							<option value="guide">Guide</option>
+						</select>
+						<div className="flex gap-2 pt-1">
+							<button
+								type="submit"
+								disabled={submitting}
+								className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition"
+							>
+								{submitting ? "Adding…" : "Add member"}
+							</button>
+							<button
+								type="button"
+								onClick={() => { setShowForm(false); setError(null); setUserId(""); setRole(""); }}
+								className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition"
+							>
+								Cancel
+							</button>
+						</div>
+					</form>
+				</div>
 			)}
-		</div>
+
+			{/* Member list */}
+			<div className="divide-y divide-gray-50">
+				{members.length === 0 ? (
+					<p className="text-xs text-gray-400 px-5 py-6 text-center">No members yet.</p>
+				) : (
+					members.map((m) => (
+						<div key={m.id} className="flex items-center justify-between px-5 py-3 gap-3">
+							<div className="min-w-0">
+								<p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
+								<p className="text-xs text-gray-400 truncate">{m.email}</p>
+							</div>
+							<span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${ROLE_PILL[m.role]}`}>
+								{m.role}
+							</span>
+						</div>
+					))
+				)}
+			</div>
+		</aside>
 	)
 }
 
 // ─── TaskPanel ────────────────────────────────────────────────────────────────
-
-type TaskPanelProps = {
-	tasks: Task[];
+function TaskCard({
+	task,
+	members,
+	canEdit,
+	projectId,
+	onUpdate,
+}: {
+	task: Task;
 	members: Member[];
-	canCreateTask: boolean;
+	canEdit: boolean;
 	projectId: string;
-	baseUrl: string;
-	onTaskAdded: (task: Task) => void;
-};
+	onUpdate: (t: Task) => void;
+}) {
+	const [editingAssignee, setEditingAssignee] = useState(false);
+	const overdue = isOverdue(task.deadline, task.status);
 
-function TaskPanel({
+	const handleAssign = async (userId: number | null) => {
+		try {
+			const res = await api.patch<{ data: Task }>(
+				`/projects/${projectId}/tasks/${task.id}/assign`,
+				{ assigned_to: userId }
+			);
+			const assignedMember = userId ? members.find((m) => m.id === userId) : null;
+			onUpdate({
+				...task,
+				...res.data,
+				assigned_to: userId,
+				assigned_to_name: assignedMember?.name ?? null,
+				assigned_to_email: assignedMember?.email ?? null,
+			});
+		} catch {
+			// silently ignore — status bar can show error at column level
+		} finally {
+			setEditingAssignee(false);
+		}
+	};
+
+	return (
+		<div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 space-y-2.5 cursor-grab active:cursor-grabbing">
+			<p className="text-sm font-medium text-gray-900 leading-snug">{task.title}</p>
+
+			{task.description && (
+				<p className="text-xs text-gray-500 line-clamp-2">{task.description}</p>
+			)}
+
+			{/* Assignee */}
+			{editingAssignee && canEdit ? (
+				<select
+					autoFocus
+					value={task.assigned_to ?? ""}
+					onChange={async (e) => {
+						const v = e.target.value;
+						await handleAssign(v ? Number(v) : null);
+					}}
+					onBlur={() => setEditingAssignee(false)}
+					className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				>
+					<option value="">Unassigned</option>
+					{members.filter((m) => m.role !== "guide").map((m) => (
+						<option key={m.id} value={m.id}>
+							{m.name} ({m.role})
+						</option>
+					))}
+				</select>
+			) : (
+				<button
+					type="button"
+					onClick={() => canEdit && setEditingAssignee(true)}
+					className={`flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 transition w-full text-left truncate ${task.assigned_to
+							? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+							: "bg-gray-100 text-gray-500 hover:bg-gray-200"
+						} ${!canEdit ? "cursor-default" : ""}`}
+				>
+					<span className="text-[10px]">👤</span>
+					<span className="truncate">{task.assigned_to_name ?? task.assigned_to_email ?? "Unassigned"}</span>
+				</button>
+			)}
+
+			{/* Deadline */}
+			{task.deadline && (
+				<div className={`flex items-center gap-1 text-[11px] font-medium ${overdue ? "text-red-600" : "text-gray-400"}`}>
+					<span>{overdue ? "⚠" : "🗓"}</span>
+					<span>{overdue ? "Overdue · " : "Due "}{fmtDate(task.deadline)}</span>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ─── KanbanBoard ──────────────────────────────────────────────────────────────
+
+function KanbanBoard({
 	tasks,
 	members,
-	canCreateTask,
+	canEdit,
+	canCreate,
 	projectId,
-	baseUrl,
-	onTaskAdded
-}: TaskPanelProps) {
+	onTasksChanged,
+}: {
+	tasks: Task[];
+	members: Member[];
+	canEdit: boolean;
+	canCreate: boolean;
+	projectId: string;
+	onTasksChanged: (updater: (prev: Task[]) => Task[]) => void;
+}) {
+	const [dragged, setDragged] = useState<Task | null>(null);
+	const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
 	const [showForm, setShowForm] = useState(false);
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
-	const [status, setStatus] = useState<TaskStatus>("todo");
 	const [assignedTo, setAssignedTo] = useState<number | "">("");
 	const [deadline, setDeadline] = useState("");
+	const [creating, setCreating] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
+	const titleRef = useRef<HTMLInputElement>(null);
 
-	const [submitting, setSubmitting] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	useEffect(() => { if (showForm) titleRef.current?.focus(); }, [showForm]);
 
-	const [editingAssigneeTaskId, setEditingAssigneeTaskId] = useState<number | null>(null);
-
-	// ─── Drag State ────────────────────────────────────────────
-	const [draggedTask, setDraggedTask] = useState<Task | null>(null);
-
-	const handleDragStart = (task: Task) => {
-		setDraggedTask(task);
-	};
-
-	const handleDrop = async (newStatus: TaskStatus) => {
-		if (!draggedTask || draggedTask.status === newStatus) return;
-
-		try {
-			const res = await apiFetch(
-				"PATCH",
-				`${baseUrl}/projects/${projectId}/tasks/${draggedTask.id}/status`,
-				{ status: newStatus }
-			);
-
-			if (!res.ok) throw new Error("Status update failed");
-
-			// update UI locally
-			onTaskAdded({
-				...draggedTask,
-				status: newStatus
-			});
-
-		} catch (err) {
-			setError("Failed to update status");
-		} finally {
-			setDraggedTask(null);
-		}
-	};
-
-	const allowDrop = (e: React.DragEvent) => e.preventDefault();
-
-	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setSubmitting(true);
-
-		try {
-			const res = await apiFetch(
-				"POST",
-				`${baseUrl}/projects/${projectId}/tasks`,
-				{
-					title,
-					description: description || null,
-					assigned_to: assignedTo || null,
-					status,
-					deadline: deadline || null,
-				}
-			)
-
-			if (!res.ok) throw new Error("Task creation failed");
-
-			const data = await res.json();
-
-			const enrichedTask: Task = {
-				...data.data,
-				assigned_to: assignedTo || data.data.assigned_to || null,
-				assigned_to_email: assignedTo
-					? members.find((m) => m.id === assignedTo)?.email ?? null
-					: data.data.assigned_to_email ?? null,
-			};
-
-			onTaskAdded(enrichedTask);
-
-			setTitle("");
-			setDescription("");
-			setStatus("todo")
-			setAssignedTo("");
-			setDeadline("");
-			setShowForm(false);
-
-		} catch (err) {
-
-			setError(err instanceof Error ? err.message : "Task creation failed");
-		} finally {
-			setSubmitting(false);
-		}
-	}
-
-	const handleCancel = () => {
-		setShowForm(false);
-		setError(null);
-	}
-
-	const formatDeadline = (deadline: string) => {
-		return new Date(deadline).toLocaleDateString("en-IN", {
-			day: "2-digit",
-			month: "short",
-			year: "numeric",
-		});
-	};
-	// ─── Kanban Setup ───────────────────────────────────────────
-	const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
-
-	const statusMeta = {
-		todo: { title: "Todo" },
-		in_progress: { title: "In Progress" },
-		done: { title: "Done" },
-	};
-
-	const grouped = statusOrder.reduce((acc, s) => {
-		acc[s] = tasks.filter(t => t.status === s);
+	const grouped = STATUS_ORDER.reduce((acc, s) => {
+		acc[s] = tasks.filter((t) => t.status === s);
 		return acc;
 	}, {} as Record<TaskStatus, Task[]>);
 
-	const handleAssign = async (task: Task, userId: number | null) => {
+	const upsert = (task: Task) =>
+		onTasksChanged((prev) => {
+			const exists = prev.some((t) => t.id === task.id);
+			return exists ? prev.map((t) => (t.id === task.id ? task : t)) : [...prev, task];
+		});
+
+	const handleDrop = async (newStatus: TaskStatus) => {
+		if (!dragged || dragged.status === newStatus) { setDragged(null); setDragOver(null); return; }
+		const prev = dragged;
+		upsert({ ...dragged, status: newStatus }); // optimistic
+		setDragged(null); setDragOver(null);
 		try {
-			const res = await apiFetch(
-				"PATCH",
-				`${baseUrl}/projects/${projectId}/tasks/${task.id}/assign`,
-				{ assigned_to: userId }
-			)
-			if (!res.ok) throw new Error("Assign failed");
-
-			const data = await res.json();
-
-			const updatedTask: Task = {
-				...task,
-				...data.data,
-				assigned_to: userId,
-				assigned_to_email: userId
-					? members.find((m) => m.id === userId)?.email ?? null
-					: null,
-			};
-
-			onTaskAdded(updatedTask);
-			setEditingAssigneeTaskId(null);
+			const res = await api.patch<{ data: Task }>(
+				`/projects/${projectId}/tasks/${prev.id}/status`,
+				{ status: newStatus }
+			);
+			upsert({ ...prev, ...res.data });
 		} catch {
-			setError("Failed to assign task")
+			upsert(prev); // rollback
 		}
+	};
 
+	const handleCreate = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setCreateError(null);
+		setCreating(true);
+		try {
+			const res = await api.post<{ data: Task }>(`/projects/${projectId}/tasks`, {
+				title,
+				description: description || undefined,
+				assigned_to: assignedTo || null,
+				deadline: deadline || undefined,
+			});
+			const m = assignedTo ? members.find((m) => m.id === assignedTo) : null;
+			upsert({
+				...res.data,
+				assigned_to: assignedTo || null,
+				assigned_to_name: m?.name ?? null,
+				assigned_to_email: m?.email ?? null,
+			});
+			setTitle(""); setDescription(""); setAssignedTo(""); setDeadline("");
+			setShowForm(false);
+		} catch (err) {
+			setCreateError(err instanceof ApiError ? err.message : "Failed to create task");
+		} finally {
+			setCreating(false);
+		}
+	};
 
-	}
-	// ─── UI ─────────────────────────────────────────────────────
 	return (
-		<div className="flex-1 bg-white shadow rounded-xl p-4">
-			{/* Header */}
-			<div className="flex justify-between items-center mb-3">
-				<h2 className="text-lg font-semibold">Tasks</h2>
-
-				{canCreateTask && (<button
-					onClick={() => setShowForm(prev => !prev)}
-					className="text-blue-500 text-sm"
-				>
-					+ Add
-				</button>
+		<div className="flex flex-col gap-4">
+			{/* Toolbar */}
+			<div className="flex items-center justify-between">
+				<h2 className="font-semibold text-gray-900 text-sm">Board</h2>
+				{canCreate && (
+					<button
+						onClick={() => { setShowForm((v) => !v); setCreateError(null); }}
+						className="text-xs font-medium text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition"
+					>
+						+ Add task
+					</button>
 				)}
 			</div>
 
-			{error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-
-			{/* Form */}
+			{/* Create task form */}
 			{showForm && (
-				<form
-					onSubmit={handleSubmit}
-					className="mb-3 border p-3 rounded bg-gray-50 flex flex-col gap-2"
-				>
-					<input
-						value={title}
-						onChange={(e) => setTitle(e.target.value)}
-						placeholder="Task title"
-						className="border p-2 rounded"
-						required
-					/>
-					<textarea
-						value={description}
-						onChange={(e) => setDescription(e.target.value)}
-						placeholder="Description"
-						className="border p-2 rounded"
-					/>
-					<select
-						value={assignedTo}
-						onChange={(e) =>
-							setAssignedTo(e.target.value ? Number(e.target.value) : "")
-						}
-						className="border p-2 rounded"
-					>
-						<option value="">Unassigned</option>
-						<>
-							{members.map((m) => (
-								<option key={m.id} value={m.id}>
-									{m.email}
-								</option>
-							))}
-						</>
-
-					</select>
-					<select
-						value={status}
-						onChange={(e) => setStatus(e.target.value as TaskStatus)}
-						className="border p-2 rounded"
-					>
-						<option value="todo">Todo</option>
-						<option value="in_progress">In Progress</option>
-						<option value="done">Done</option>
-					</select>
-					<input
-						type="date"
-						value={deadline}
-						onChange={(e) => setDeadline(e.target.value)}
-						className="border p-2 rounded"
-					/>
-
-					<div className="flex gap-3">
-						<button
-							type="submit"
-							disabled={submitting}
-							className="bg-blue-500 text-white px-3 py-1 rounded disabled:opacity-50"
-						>
-							{submitting ? "Creating..." : "Create"}
-						</button>
-
-						<button
-							type="button"
-							onClick={handleCancel}
-							className="text-gray-500 bg-red-100 px-3 py-1 rounded"
-						>
-							Cancel
-						</button>
-					</div>
-
-				</form>
+				<div className="bg-white rounded-xl border border-blue-200 shadow-sm p-5">
+					<h3 className="text-sm font-semibold text-gray-800 mb-4">New task</h3>
+					{createError && <p className="text-xs text-red-600 mb-3">{createError}</p>}
+					<form onSubmit={handleCreate} className="space-y-3">
+						<input
+							ref={titleRef}
+							required
+							type="text"
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+							placeholder="Task title…"
+							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+						<textarea
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+							placeholder="Description (optional)"
+							rows={2}
+							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+						<div className="grid grid-cols-2 gap-3">
+							<select
+								value={assignedTo}
+								onChange={(e) => setAssignedTo(e.target.value ? Number(e.target.value) : "")}
+								className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+							>
+								<option value="">Unassigned</option>
+								{members.filter((m) => m.role !== "guide").map((m) => (
+									<option key={m.id} value={m.id}>{m.name}</option>
+								))}
+							</select>
+							<input
+								type="date"
+								value={deadline}
+								onChange={(e) => setDeadline(e.target.value)}
+								className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+							/>
+						</div>
+						<div className="flex gap-2 pt-1">
+							<button
+								type="submit"
+								disabled={creating}
+								className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition"
+							>
+								{creating ? "Creating…" : "Create task"}
+							</button>
+							<button
+								type="button"
+								onClick={() => { setShowForm(false); setCreateError(null); }}
+								className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition"
+							>
+								Cancel
+							</button>
+						</div>
+					</form>
+				</div>
 			)}
 
-			{/* Kanban Board */}
+			{/* Columns */}
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+				{STATUS_ORDER.map((statusKey) => {
+					const meta = STATUS_COL[statusKey];
+					const col = grouped[statusKey];
+					const isTargeted = dragOver === statusKey;
+					return (
+						<div
+							key={statusKey}
+							className={`rounded-xl p-3 min-h-[220px] transition-colors ${meta.bg} ${isTargeted ? "ring-2 ring-blue-400 ring-inset" : ""}`}
+							onDragOver={(e) => { e.preventDefault(); setDragOver(statusKey); }}
+							onDragLeave={() => setDragOver(null)}
+							onDrop={() => handleDrop(statusKey)}
+						>
+							{/* Column header */}
+							<div className="flex items-center gap-2 mb-3 px-1">
+								<span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+								<span className="text-xs font-semibold text-gray-700">{meta.label}</span>
+								<span className={`ml-auto text-xs font-medium ${meta.count}`}>{col.length}</span>
+							</div>
 
-				{statusOrder.map((statusKey) => (
-					<div
-						key={statusKey}
-						className="bg-gray-50 rounded-lg p-3"
-						onDragOver={allowDrop}
-						onDrop={() => handleDrop(statusKey)}
-					>
-						{/* Column Header */}
-						<div className="flex justify-between items-center mb-3">
-							<h3 className="text-sm font-semibold">
-								{statusMeta[statusKey].title}
-							</h3>
-							<span className="text-xs text-gray-500">
-								{grouped[statusKey].length}
-							</span>
-						</div>
-
-						{/* Tasks */}
-						<div className="space-y-2">
-							{grouped[statusKey].length === 0 ? (
-								<p className="text-xs text-gray-400">No tasks</p>
-							) : (
-								grouped[statusKey].map((task) => (
-									<div
-										key={task.id}
-										draggable
-										onDragStart={() => handleDragStart(task)}
-										className="bg-white border rounded-lg p-3 shadow-sm text-sm cursor-move max-w-full overflow-hidden"
-									>
-										<div className="font-medium mb-2 truncate">
-											{task.title}
+							{/* Cards */}
+							<div className="space-y-2">
+								{col.length === 0 ? (
+									<p className="text-xs text-gray-400 text-center py-6">Drop tasks here</p>
+								) : (
+									col.map((task) => (
+										<div
+											key={task.id}
+											draggable={canEdit}
+											onDragStart={() => setDragged(task)}
+											onDragEnd={() => { if (dragged) setDragged(null); }}
+										>
+											<TaskCard
+												task={task}
+												members={members}
+												canEdit={canEdit}
+												projectId={projectId}
+												onUpdate={upsert}
+											/>
 										</div>
-
-										<div className="flex flex-col gap-2 text-xs text-gray-500 min-w-0">
-											{/* Assignee */}
-											<div className="min-w-0">
-												{editingAssigneeTaskId === task.id ? (
-													<select
-														autoFocus
-														value={task.assigned_to ?? ""}
-														onChange={async (e) => {
-															const userId = e.target.value ? Number(e.target.value) : null;
-															await handleAssign(task, userId);
-														}}
-														onBlur={() => setEditingAssigneeTaskId(null)}
-														className="border rounded px-2 py-1 text-xs bg-white w-full max-w-full truncate"
-													>
-														<option value="">Unassigned</option>
-
-														{members
-															.filter((m) => m.role !== "guide")
-															.map((m) => (
-																<option key={m.id} value={m.id}>
-																	{m.email} {m.role === "owner" ? "(Owner)" : ""}
-																</option>
-															))}
-													</select>
-												) : (
-													<button
-														type="button"
-														onClick={() => setEditingAssigneeTaskId(task.id)}
-														className={
-															task.assigned_to
-																? "max-w-full px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 truncate block"
-																: "max-w-full px-2 py-1 rounded-full bg-gray-100 text-gray-500 border hover:bg-gray-200 truncate block"
-														}
-													>
-														{task.assigned_to_email ?? "Unassigned"}
-													</button>
-												)}
-											</div>
-
-											{/* Deadline */}
-											{task.deadline && (
-												<div className="text-[11px] text-gray-400 truncate">
-													Due: {formatDeadline(task.deadline)}
-												</div>
-											)}
-										</div>
-									</div>
-								))
-							)}
+									))
+								)}
+							</div>
 						</div>
-
-					</div>
-				))}
-
+					);
+				})}
 			</div>
 		</div>
-	)
-
+	);
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectClient({ projectId }: { projectId: string }) {
 	const router = useRouter();
-	const BASE_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [projectDetails, setProjectDetails] = useState<Project | null>(null);
+	const [project, setProject] = useState<Project | null>(null);
 	const [tasks, setTasks] = useState<Task[]>([]);
 	const [members, setMembers] = useState<Member[]>([]);
-
 	const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
 	useEffect(() => {
-		const fetchData = async () => {
-			const token = localStorage.getItem("token");
-			if (!token) {
-				router.replace("/login");
-				return;
-			}
-
-			const rawId = localStorage.getItem("user_id");
-			setCurrentUserId(rawId ? Number(rawId) : null);
-
-			const base = `${BASE_URL}/projects/${projectId}`;
-
+		const load = async () => {
 			try {
-				const headers = getAuthHeaders();
-
-				const [projectRes, membersRes, tasksRes] = await Promise.all([
-					fetch(base, { headers }),
-					fetch(`${base}/members`, { headers }),
-					fetch(`${base}/tasks`, { headers })
+				const [meRes, projectRes, membersRes, tasksRes] = await Promise.all([
+					api.get<{ data: { id: number; name: string; email: string } }>("/auth/me"),
+					api.get<{ data: Project }>(`/projects/${projectId}`),
+					api.get<{ data: Member[] }>(`/projects/${projectId}/members`),
+					api.get<{ data: Task[] }>(`/projects/${projectId}/tasks`),
 				]);
-
-				if (!projectRes.ok) throw new Error("Project fetch failed");
-				if (!membersRes.ok) throw new Error("Members fetch failed");
-				if (!tasksRes.ok) throw new Error("Tasks fetch failed");
-
-				const [projectData, memberData, tasksData] = await Promise.all([
-					projectRes.json(),
-					membersRes.json(),
-					tasksRes.json()
-				]);
-
-				setProjectDetails(projectData.data);
-				setMembers(memberData.data);
-				setTasks(tasksData.data);
-
+				setCurrentUserId(meRes.data.id);
+				setProject(projectRes.data);
+				setMembers(membersRes.data);
+				setTasks(tasksRes.data);
 			} catch (err) {
-				setError(err instanceof Error ? err.message : "Something went wrong");
+				if (err instanceof ApiError && err.status === 401) {
+					router.replace("/login");
+				} else {
+					setError(err instanceof Error ? err.message : "Failed to load project");
+				}
 			} finally {
 				setLoading(false);
 			}
 		};
-
-		fetchData();
-	}, [projectId]);
-
-	if (loading) return <div>Loading...</div>;
-	if (error) return <div>{error}</div>;
-	if (!projectDetails) return <div>No project found</div>;
-
-
-	const isOwner =
-		currentUserId !== null &&
-		projectDetails.owner_id === currentUserId;
-
-	const canCreateTask =
-		isOwner ||
-		(currentUserId !== null &&
-			members.find(m => m.id === currentUserId)?.role === "editor");
+		load();
+	}, [projectId, router]);
 
 	const refetchMembers = async () => {
-		const res = await fetch(`${BASE_URL}/projects/${projectId}/members`, {
-			headers: getAuthHeaders(),
-		});
-		if (!res.ok) return;
-		const data = await res.json();
-		setMembers(data.data);
-	};
-
-	// Drag component
-	const upsertTask = (task: Task) => {
-		setTasks(prev => {
-			const exists = prev.find(t => t.id === task.id);
-			if (exists) {
-				return prev.map(t => t.id === task.id ? task : t);
-			}
-			return [...prev, task];
-		});
+		const res = await api.get<{ data: Member[] }>(`/projects/${projectId}/members`);
+		setMembers(res.data);
 	};
 
 	const handleDeleteProject = async () => {
-		const ok = window.confirm("Delete this project? This cannot be undone.");
-		if (!ok) return;
-
+		if (!window.confirm("Permanently delete this project and all its tasks?")) return;
 		try {
-			const res = await fetch(
-				`${BASE_URL}/projects/${projectId}`,
-				{
-					method: "DELETE",
-					headers: getAuthHeaders(),
-				}
-			)
-
-			if (!res.ok) throw new Error("Delete failed");
-
+			await api.delete(`/projects/${projectId}`);
 			router.replace("/dashboard");
-
 		} catch {
-			setError("Failed to delete project")
+			setError("Failed to delete project");
 		}
+	};
+
+	if (loading) {
+		return (
+			<div className="flex items-center justify-center min-h-[60vh]">
+				<div className="text-center space-y-3">
+					<div className="mx-auto w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+					<p className="text-sm text-gray-500">Loading project…</p>
+				</div>
+			</div>
+		);
 	}
 
-	return (
-		<div className="min-h-screen bg-gray-50">
-			<div className="mx-auto max-w-7xl px-6 py-4 space-y-5">
-				<div>
-					<button
-						onClick={() => router.push("/dashboard")}
-						className="text-blue-600 text-sm hover:underline"
-					>
+	if (error || !project) {
+		return (
+			<div className="flex items-center justify-center min-h-[60vh]">
+				<div className="text-center space-y-3">
+					<p className="text-gray-700 font-medium">{error ?? "Project not found"}</p>
+					<Link href="/dashboard" className="text-sm text-blue-600 hover:underline">
 						← Back to Dashboard
-					</button>
+					</Link>
 				</div>
+			</div>
+		);
+	}
 
-				<div className="bg-white border shadow-sm rounded-2xl px-5 py-4 flex justify-between items-center">
-					<div className="space-y-3">
-						<h2 className="text-2xl font-semibold text-gray-800">
-							{projectDetails.title}
-						</h2>
+	const isOwner = currentUserId !== null && project.owner_id === currentUserId;
+	const myRole = members.find((m) => m.id === currentUserId)?.role;
+	const canEdit = isOwner || myRole === "editor";
+	const canCreate = canEdit;
 
-						<div className="flex flex-wrap gap-2 text-sm">
-							<span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
-								📝 {projectDetails.todo_count} Todo
+	const total = project.task_count;
+	const doneCount = project.done_count;
+	const progress = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
+	return (
+		<div className="mx-auto max-w-7xl px-6 py-6 space-y-6">
+			{/* Breadcrumb */}
+			<Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+				<span>←</span>
+				<span>Dashboard</span>
+			</Link>
+
+			{/* Project header */}
+			<div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-5">
+				<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+					<div className="min-w-0 flex-1">
+						<h1 className="text-xl font-bold text-gray-900 truncate">{project.title}</h1>
+
+						{/* Status badges */}
+						<div className="flex flex-wrap gap-2 mt-3">
+							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+								<span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+								{project.todo_count} Todo
 							</span>
-							<span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
-								⏳ {projectDetails.in_progress_count} In Progress
+							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
+								<span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+								{project.in_progress_count} In Progress
 							</span>
-							<span className="px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
-								✅ {projectDetails.done_count} Done
+							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+								<span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+								{project.done_count} Done
 							</span>
-							<span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium">
-								👥 {projectDetails.member_count} Members
+							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+								<span>👥</span>
+								{project.member_count} Member{project.member_count !== 1 ? "s" : ""}
 							</span>
 						</div>
+
+						{/* Progress bar */}
+						{total > 0 && (
+							<div className="mt-4 flex items-center gap-3">
+								<div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+									<div
+										className="h-full bg-green-500 rounded-full transition-all"
+										style={{ width: `${progress}%` }}
+									/>
+								</div>
+								<span className="text-xs text-gray-500 tabular-nums shrink-0">{progress}% done</span>
+							</div>
+						)}
 					</div>
 
 					{isOwner && (
 						<button
 							onClick={handleDeleteProject}
-							className="text-red-500 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm"
+							className="shrink-0 px-3.5 py-2 rounded-lg border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition"
 						>
-							Delete
+							Delete project
 						</button>
 					)}
 				</div>
+			</div>
 
-				<div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-					<MemberPanel
-						members={members}
-						isOwner={isOwner}
-						projectId={projectId}
-						baseUrl={BASE_URL}
-						onMemberAdded={refetchMembers}
-					/>
-
-					<TaskPanel
-						tasks={tasks}
-						members={members}
-						canCreateTask={!!canCreateTask}
-						projectId={projectId}
-						baseUrl={BASE_URL}
-						onTaskAdded={upsertTask}
-					/>
-				</div>
+			{/* Body */}
+			<div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+				<MemberPanel
+					members={members}
+					isOwner={isOwner}
+					projectId={projectId}
+					onMembersChanged={refetchMembers}
+				/>
+				<KanbanBoard
+					tasks={tasks}
+					members={members}
+					canEdit={canEdit}
+					canCreate={canCreate}
+					projectId={projectId}
+					onTasksChanged={setTasks}
+				/>
 			</div>
 		</div>
 	);
