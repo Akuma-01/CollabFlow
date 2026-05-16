@@ -46,8 +46,12 @@ function MemberPanel({
 	onMembersChanged: () => Promise<void>;
 }) {
 	const [showForm, setShowForm] = useState(false);
-	const [userId, setUserId] = useState<number | "">("")
 	const [role, setRole] = useState<"editor" | "viewer" | "guide" | "">("");
+
+	const [search, setSearch] = useState('');
+	const [results, setResults] = useState<{ id: number; name: string; email: string }[]>([]);
+	const [selected, setSelected] = useState<{ id: number; name: string; email: string } | null>(null);
+	const [searching, setSearching] = useState(false);
 
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -55,19 +59,34 @@ function MemberPanel({
 
 	useEffect(() => { if (showForm) inputRef.current?.focus(); }, [showForm]);
 
+	useEffect(() => {
+		if (search.length < 2) { setResults([]); return; }
+		const t = setTimeout(async () => {
+			setSearching(true);
+			try {
+				const res = await api.get<{ data: typeof results }>(`/users/search?q=${encodeURIComponent(search)}`);
+				setResults(res.data);
+			} catch { setResults([]); }
+			finally { setSearching(false); }
+		}, 300);
+		return () => clearTimeout(t);
+	}, [search]);
+
 	const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (!userId || !role) return;
+		if (!selected || !role) return;
 
 		setSubmitting(true);
 		setError(null);
 
 		try {
-			await api.post(`/projects/${projectId}/members`, { user_id: userId, role });
+			await api.post(`/projects/${projectId}/members`, { user_id: selected.id, role });
 
 			await onMembersChanged();
-			setUserId("");
 			setRole("");
+			setSearch("");
+			setResults([]);
+			setSelected(null);
 			setShowForm(false);
 
 		} catch (err) {
@@ -101,13 +120,27 @@ function MemberPanel({
 					<form onSubmit={handleAdd} className="space-y-2">
 						<input
 							ref={inputRef}
-							required
-							type="number"
-							placeholder="User ID"
-							value={userId}
-							onChange={(e) => setUserId(e.target.value ? Number(e.target.value) : "")}
-							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+							type="text"
+							placeholder="Search by name or email…"
+							value={search}
+							onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
+							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
+						{results.length > 0 && !selected && (
+							<ul className="border border-gray-200 rounded-lg bg-white divide-y divide-gray-100 text-sm max-h-40 overflow-y-auto">
+								{results.map(u => (
+									<li
+										key={u.id}
+										onClick={() => { setSelected(u); setSearch(u.email); setResults([]); }}
+										className="px-3 py-2 cursor-pointer hover:bg-blue-50"
+									>
+										<span className="font-medium">{u.name}</span>
+										<span className="text-gray-400 ml-2 text-xs">{u.email}</span>
+									</li>
+								))}
+							</ul>
+						)}
+						{searching && <p className="text-xs text-gray-400">Searching…</p>}
 						<select
 							required
 							value={role}
@@ -129,7 +162,7 @@ function MemberPanel({
 							</button>
 							<button
 								type="button"
-								onClick={() => { setShowForm(false); setError(null); setUserId(""); setRole(""); }}
+								onClick={() => { setShowForm(false); setError(null); setRole(""); setSearch(""); setSelected(null); setResults([]); }}
 								className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition"
 							>
 								Cancel
@@ -231,8 +264,8 @@ function TaskCard({
 					type="button"
 					onClick={() => canEdit && setEditingAssignee(true)}
 					className={`flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 transition w-full text-left truncate ${task.assigned_to
-							? "bg-blue-50 text-blue-700 hover:bg-blue-100"
-							: "bg-gray-100 text-gray-500 hover:bg-gray-200"
+						? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+						: "bg-gray-100 text-gray-500 hover:bg-gray-200"
 						} ${!canEdit ? "cursor-default" : ""}`}
 				>
 					<span className="text-[10px]">👤</span>
