@@ -97,13 +97,21 @@ DB_PORT=
 - `tasks.assigned_to` uses ON DELETE SET NULL — deleting a user unassigns their tasks
 - Role-based authorization via reusable `hasRole` middleware
 
-## Future Features
-- Project showcase/discovery page with upvoting
-- Public project profiles
-- University-wide project leaderboard
-- Project cover images/GIFs via file upload
-- Domain-based access control for college email verification
-- GET /users?search= endpoint for user lookup
-- Refresh token system for better auth security
-- Real-time notifications via WebSockets
-- Comment/feedback system for faculty guides to review student progress
+## Planned Improvements
+
+- **Real-time notifications** — WebSocket events for task assignments, status changes, and new
+  members so collaborators don't need to refresh manually
+- **Comment system** — faculty guides need a way to leave feedback on tasks or milestones beyond
+  read-only access; a `task_comments` table with role-gated write access covers this
+- **College email verification** — domain-based access control (e.g. only `@university.edu`
+  addresses can register) to keep workspaces institution-scoped
+- **Project cover images** — file upload for a project thumbnail; needs a storage backend
+  (S3 or equivalent) before this makes sense to implement
+
+## Potential Directions
+
+- **Project showcase** — a public discovery feed where teams can publish completed projects,
+  with upvoting and filtering by domain/tech stack
+- **University leaderboard** — contribution tracking across projects, ranked by institution;
+  requires careful thought about what "contribution" means fairly
+- **Public project profiles** — shareable project pages for portfolios, visible without login

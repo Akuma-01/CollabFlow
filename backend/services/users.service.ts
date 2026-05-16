@@ -1,8 +1,15 @@
 import pool from '../config/db';
 import { User } from '../types';
 
-export const getAllUsers = async (): Promise<User[]> => {
-	const result = await pool.query('SELECT id, name, email FROM users ORDER BY id ASC');
+export const searchUsers = async (query: string): Promise<Pick<User, 'id' | 'name' | 'email'>[]> => {
+	const result = await pool.query(
+		`SELECT id, name, email FROM users
+			WHERE email ILIKE $1 OR name ILIKE $1
+			ORDER BY email ASC
+			LIMIT 10`,
+		[`%${query}%`]
+	);
+
 	return result.rows;
 };
 

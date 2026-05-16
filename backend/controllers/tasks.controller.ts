@@ -111,10 +111,10 @@ export const updateTask = async (req: Request, res: Response, next: NextFunction
 		return next({ status: 400, message: "Valid project ID is required" });
 	}
 
-	const { title, description } = req.body;
+	const { title, description, deadline } = req.body;
 
 	try {
-		const updatedTask = await tasksService.updateTask(task_id, project_id, title, description);
+		const updatedTask = await tasksService.updateTask(task_id, project_id, title, description, deadline);
 
 		res.status(200).json({ success: true, data: updatedTask });
 	} catch (err) {
