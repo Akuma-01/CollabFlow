@@ -20,7 +20,30 @@ async function request<T>(
 		headers: { "Content-Type": "application/json" },
 		credentials: "include",
 		...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-	})
+	});
+
+	if (res.status === 401 && path !== '/auth/refresh') {
+		const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+			method: 'POST',
+			credentials: 'include',
+		});
+
+		if (refreshRes.ok) {
+			const retry = await fetch(`${BASE_URL}${path}`, {
+				method,
+				headers: { "Content-type": "application/json" },
+				credentials: "include",
+				...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+			});
+
+			const retryData = await retry.json().catch(() => ({}));
+			if (!retry.ok) {
+				throw new ApiError(retryData?.message || "Something went wrong", retry.status);
+			}
+
+			return retryData;
+		}
+	}
 
 	const data = await res.json().catch(() => ({}));
 
