@@ -1,10 +1,17 @@
+import dotenv from 'dotenv';
+import path from 'path';
 import { Pool } from 'pg';
 
+dotenv.config({
+	path: path.resolve(__dirname, '..', process.env.NODE_ENV === 'test' ? '.env.test' : '.env'),
+	override: true,
+});
+
 const pool = new Pool(
-	process.env.DATABASE_URL
+	process.env.DATABASE_URL && process.env.NODE_ENV !== 'test'
 		? {
 			connectionString: process.env.DATABASE_URL,
-			ssl: { rejectUnauthorized: false }
+			ssl: { rejectUnauthorized: false },
 		}
 		: {
 			user: process.env.DB_USER,

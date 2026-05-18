@@ -67,7 +67,8 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 		const newAccessToken = tokenService.signAccessToken({ id: user.id, email: user.email, name: user.name });
 		res.cookie('token', newAccessToken, COOKIE_OPTIONS);
 		res.status(200).json({ success: true });
-	} catch {
+	} catch (err) {
+		console.error('REFRESH ERROR:', err);
 		return next(new AppError('Invalid or expired refresh token', 401));
 	}
 };

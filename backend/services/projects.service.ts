@@ -15,6 +15,21 @@ export const isProjectOwner = async (project_id: number, user_id: number): Promi
 	return result.rows.length > 0;
 };
 
+export const getProjectAccess = async (
+	project_id: number,
+	user_id: number
+): Promise<{ owner_id: number; role: ProjectRole | null } | undefined> => {
+	const result = await pool.query(
+		`SELECT p.owner_id, pm.role
+		 FROM projects p
+		 LEFT JOIN project_members pm
+		   ON pm.project_id = p.id AND pm.user_id = $2
+		 WHERE p.id = $1`,
+		[project_id, user_id]
+	);
+	return result.rows[0];
+};
+
 export const getAllProjects = async (userId: number): Promise<Project[]> => {
 	const result = await pool.query(
 		`SELECT

@@ -18,9 +18,16 @@ const errorMiddleware = (err: AppError, req: Request, res: Response, next: NextF
 		}
 	}
 
-	// Known application errors
+	// Known application errors (AppError instances or plain { status, message } objects)
 	if (err instanceof AppError) {
 		res.status(err.status).json({ success: false, message: err.message });
+		return;
+	}
+
+	// Plain objects with status/message (e.g. next({ status: 403, message: '...' }))
+	if (err && typeof err === 'object' && 'status' in err && 'message' in err) {
+		const plainErr = err as { status: number; message: string };
+		res.status(plainErr.status).json({ success: false, message: plainErr.message });
 		return;
 	}
 

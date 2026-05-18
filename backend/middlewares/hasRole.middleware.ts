@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { getProjectById, getProjectMember } from '../services/projects.service';
+import { getProjectAccess } from '../services/projects.service';
 import { ProjectRole } from '../types';
 
 const hasRole = (allowedRoles: ProjectRole[]) => {
@@ -7,21 +7,21 @@ const hasRole = (allowedRoles: ProjectRole[]) => {
 		try {
 			const user_id = Number(req.user.id);
 			const project_id = Number(req.params.projectId);
-			const project = await getProjectById(project_id);
-			if (!project) {
+			const access = await getProjectAccess(project_id, user_id);
+
+			if (!access) {
 				return next({ status: 404, message: "Project not found" })
 			}
 
-			if (project.owner_id === user_id) {
+			if (access.owner_id === user_id) {
 				return next();
 			}
 
-			const member = await getProjectMember(project_id, user_id);
-			if (!member) {
-				return next({ status: 403, message: "Not a project member" })
+			if (!access.role) {
+				return next({ status: 403, message: "Not a project member" });
 			}
 
-			if (allowedRoles.includes(member.role)) {
+			if (allowedRoles.includes(access.role)) {
 				return next();
 			}
 

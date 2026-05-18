@@ -36,6 +36,10 @@ app.use("/projects", taskRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use(errorMiddleware);
 
-app.listen(3000, "0.0.0.0", () => {
-	console.log("Server running on http://0.0.0.0:3000");
-});
+export default app;
+
+if (require.main === module) {
+	app.listen(3000, "0.0.0.0", () => {
+		console.log("Server running on http://0.0.0.0:3000");
+	});
+}

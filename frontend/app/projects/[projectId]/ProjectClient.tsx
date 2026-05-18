@@ -126,6 +126,11 @@ function MemberPanel({
 							onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
 							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
+						{selected && (
+							<p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-md px-2.5 py-1.5">
+								✓ {selected.name} <span className="text-green-500">({selected.email})</span>
+							</p>
+						)}
 						{results.length > 0 && !selected && (
 							<ul className="border border-gray-200 rounded-lg bg-white divide-y divide-gray-100 text-sm max-h-40 overflow-y-auto">
 								{results.map(u => (
@@ -209,6 +214,7 @@ function TaskCard({
 	onUpdate: (t: Task) => void;
 }) {
 	const [editingAssignee, setEditingAssignee] = useState(false);
+	const [assignError, setAssignError] = useState<string | null>(null);
 	const overdue = isOverdue(task.deadline, task.status);
 
 	const handleAssign = async (userId: number | null) => {
@@ -225,8 +231,8 @@ function TaskCard({
 				assigned_to_name: assignedMember?.name ?? null,
 				assigned_to_email: assignedMember?.email ?? null,
 			});
-		} catch {
-			// silently ignore — status bar can show error at column level
+		} catch (err) {
+			setAssignError(err instanceof ApiError ? err.message : "Failed to assign");
 		} finally {
 			setEditingAssignee(false);
 		}
@@ -271,6 +277,11 @@ function TaskCard({
 					<span className="text-[10px]">👤</span>
 					<span className="truncate">{task.assigned_to_name ?? task.assigned_to_email ?? "Unassigned"}</span>
 				</button>
+			)}
+
+			{/* Assign error */}
+			{assignError && (
+				<p className="text-[11px] text-red-500 mt-1">{assignError}</p>
 			)}
 
 			{/* Deadline */}

@@ -113,7 +113,7 @@ export const createProjectMember = async (req: Request, res: Response, next: Nex
 			role: role as ProjectRole
 		});
 
-		res.status(200).json({
+		res.status(201).json({
 			success: true,
 			data: newProjectMember
 		})
