@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { verifyAccessToken } from '../services/token.service';
 import { isUser } from '../services/users.service';
 import { AppError } from '../utils/AppError';
 
@@ -21,17 +21,14 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction): 
 			return next(new AppError('No token provided', 401));
 		}
 
-		// verufy token
-		const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-			id: number;
-			email: string;
-			name: string;
-		};
+		// Use verifyAccessToken from token.service so access tokens are always
+		// verified with JWT_SECRET — never with JWT_REFRESH_SECRET.
+		const decoded = verifyAccessToken(token);
 
 		if (!(await isUser(decoded.id))) {
 			return next(new AppError('User no longer exists', 401));
 		}
-		// attach decoded user to req.user
+
 		req.user = decoded;
 		next();
 	} catch (err) {

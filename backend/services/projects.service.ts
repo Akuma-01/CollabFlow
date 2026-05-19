@@ -189,18 +189,24 @@ export const updateMemberRole = async (project_id: number, user_id: number, role
 // ── Guide ─────────────────────────────────────────────────────────────────────
 
 export const addGuide = async (project_id: number, user_id: number): Promise<void> => {
-	const existing = await pool.query(
-		'SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2',
-		[project_id, user_id]
-	);
-	if (existing.rows.length > 0) {
-		throw new AppError('User is already a member of this project', 400);
+	if (await isProjectOwner(project_id, user_id)) {
+		throw new AppError('Owner cannot be added as guide', 400);
 	}
 
-	await pool.query(
-		'INSERT INTO project_members (user_id, project_id, role) VALUES ($1, $2, $3)',
-		[user_id, project_id, 'guide']
+	// INSERT ... ON CONFLICT DO NOTHING eliminates the SELECT + INSERT race
+	// condition. If the user is already a member the insert is a no-op and we
+	// check the result to throw a clean error.
+	const result = await pool.query(
+		`INSERT INTO project_members (user_id, project_id, role)
+		 VALUES ($1, $2, 'guide')
+		 ON CONFLICT (user_id, project_id) DO NOTHING
+		 RETURNING *`,
+		[user_id, project_id]
 	);
+
+	if (result.rowCount === 0) {
+		throw new AppError('User is already a member of this project', 400);
+	}
 };
 
 export const isGuide = async (project_id: number, user_id: number): Promise<boolean> => {

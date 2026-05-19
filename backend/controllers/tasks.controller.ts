@@ -5,14 +5,22 @@ import { TaskStatus } from '../types';
 
 export const createTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 	try {
-		const { title, description, deadline } = req.body;
+		const { title, description, deadline, assigned_to } = req.body;
 
 		const project_id = Number(req.params.projectId);
 		if (isNaN(project_id)) {
 			return next({ status: 400, message: "Valid project ID is required" })
 		}
 
-		const result = await tasksService.createTask(title, description, project_id, req.user.id, deadline);
+		// assigned_to is now forwarded to the service so it isn't silently dropped.
+		const result = await tasksService.createTask(
+			title,
+			description,
+			project_id,
+			req.user.id,
+			deadline,
+			assigned_to ?? null,
+		);
 
 		res.status(201).json({
 			success: true,
@@ -20,7 +28,6 @@ export const createTask = async (req: Request, res: Response, next: NextFunction
 		})
 
 	} catch (err) {
-		console.error("CREATE TASK ERROR:", err);
 		next(err);
 	}
 }
@@ -88,7 +95,9 @@ export const updateTaskStatus = async (req: Request, res: Response, next: NextFu
 	const { status } = req.body;
 
 	try {
-		const result = await tasksService.updateTaskStatus(task_id, status as TaskStatus);
+		// project_id is now passed — the service scopes the UPDATE to this project
+		// so an editor of project A cannot mutate tasks in project B.
+		const result = await tasksService.updateTaskStatus(task_id, project_id, status as TaskStatus);
 
 		res.status(200).json({
 			success: true,
@@ -134,7 +143,7 @@ export const deleteTask = async (req: Request, res: Response, next: NextFunction
 	}
 
 	try {
-		const deletedTask = await tasksService.deleteTask(task_id, project_id);
+		await tasksService.deleteTask(task_id, project_id);
 
 		res.status(200).json({ success: true, message: "Task successfully deleted" })
 	} catch (err) {

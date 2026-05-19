@@ -29,7 +29,12 @@ function fmtDate(d: string) {
 
 function isOverdue(deadline: string | null, status: TaskStatus) {
 	if (!deadline || status === "done") return false;
-	return new Date(deadline) < new Date(new Date().toDateString());
+	// Fixed: previously used new Date(deadline) which parses as UTC midnight,
+	// compared against local midnight — causing off-by-one for IST (+5:30) and
+	// other UTC+ timezones. Comparing date strings directly avoids TZ conversion.
+	const todayStr = new Date().toISOString().slice(0, 10);
+	const deadlineStr = deadline.slice(0, 10);
+	return deadlineStr < todayStr;
 }
 
 // ─── MemberPanel ──────────────────────────────────────────────────────────────
@@ -360,6 +365,8 @@ function KanbanBoard({
 			const res = await api.post<{ data: Task }>(`/projects/${projectId}/tasks`, {
 				title,
 				description: description || undefined,
+				// assigned_to is now included in createTaskSchema so it reaches
+				// the backend and is persisted on creation.
 				assigned_to: assignedTo || null,
 				deadline: deadline || undefined,
 			});
@@ -544,9 +551,16 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 		load();
 	}, [projectId, router]);
 
+	// Fixed: refetchMembers now has error handling so a network blip doesn't
+	// cause an unhandled promise rejection that crashes the member panel.
 	const refetchMembers = async () => {
-		const res = await api.get<{ data: Member[] }>(`/projects/${projectId}/members`);
-		setMembers(res.data);
+		try {
+			const res = await api.get<{ data: Member[] }>(`/projects/${projectId}/members`);
+			setMembers(res.data);
+		} catch (err) {
+			// Non-fatal — member panel will show stale data; user can refresh.
+			console.error("Failed to refresh members:", err);
+		}
 	};
 
 	const handleDeleteProject = async () => {
@@ -588,8 +602,13 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 	const canEdit = isOwner || myRole === "editor";
 	const canCreate = canEdit;
 
-	const total = project.task_count;
-	const doneCount = project.done_count;
+	// Fixed: task counts are now derived from live `tasks` state rather than
+	// the stale `project` snapshot fetched on load. Previously, creating,
+	// deleting, or dragging tasks would not update the progress bar or badges.
+	const todoCount = tasks.filter((t) => t.status === "todo").length;
+	const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
+	const doneCount = tasks.filter((t) => t.status === "done").length;
+	const total = tasks.length;
 	const progress = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
 	return (
@@ -606,19 +625,19 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 					<div className="min-w-0 flex-1">
 						<h1 className="text-xl font-bold text-gray-900 truncate">{project.title}</h1>
 
-						{/* Status badges */}
+						{/* Status badges — now sourced from live task counts */}
 						<div className="flex flex-wrap gap-2 mt-3">
 							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
 								<span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-								{project.todo_count} Todo
+								{todoCount} Todo
 							</span>
 							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
 								<span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-								{project.in_progress_count} In Progress
+								{inProgressCount} In Progress
 							</span>
 							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
 								<span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-								{project.done_count} Done
+								{doneCount} Done
 							</span>
 							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
 								<span>👥</span>

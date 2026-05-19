@@ -15,9 +15,11 @@ async function request<T>(
 	path: string,
 	body?: unknown
 ): Promise<T> {
+	const headers = { "Content-Type": "application/json" };
+
 	const res = await fetch(`${BASE_URL}${path}`, {
 		method,
-		headers: { "Content-Type": "application/json" },
+		headers,
 		credentials: "include",
 		...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 	});
@@ -29,9 +31,11 @@ async function request<T>(
 		});
 
 		if (refreshRes.ok) {
+			// Fixed: was "Content-type" (lowercase t) — inconsistent with the
+			// original request and could cause issues with strict proxies.
 			const retry = await fetch(`${BASE_URL}${path}`, {
 				method,
-				headers: { "Content-type": "application/json" },
+				headers,  // reuse the same headers object — consistent casing
 				credentials: "include",
 				...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 			});
@@ -43,6 +47,10 @@ async function request<T>(
 
 			return retryData;
 		}
+
+		// Refresh failed — token is truly expired. Throw 401 so callers
+		// (e.g. ProjectClient) can redirect to login.
+		throw new ApiError("Session expired", 401);
 	}
 
 	const data = await res.json().catch(() => ({}));

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const roleEnum = z.enum(["editor", "viewer"]);
+const roleEnum = z.enum(["editor", "viewer", "guide"]);
 
 export const addMemberSchema = z.object({
 	user_id: z.number(),

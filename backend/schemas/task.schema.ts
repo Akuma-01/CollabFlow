@@ -11,6 +11,7 @@ export const createTaskSchema = z.object({
 	title: z.string().min(1, 'Title is required'),
 	description: z.string().optional(),
 	deadline: isoDate,
+	assigned_to: z.number().nullable().optional(),
 });
 
 export const updateTaskSchema = z.object({
