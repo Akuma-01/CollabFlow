@@ -9,7 +9,7 @@ export interface TestUser {
 
 export function useTestDatabase(): void {
 	beforeEach(async () => {
-		await pool.query('TRUNCATE project_members, tasks, projects, users RESTART IDENTITY');
+		await pool.query('TRUNCATE auth_sessions, project_members, tasks, projects, users RESTART IDENTITY');
 	});
 	afterAll(async () => {
 		await pool.end();
@@ -21,6 +21,12 @@ export function parseCookies(res: request.Response): string {
 		.concat(res.headers['set-cookie'] ?? [])
 		.map(cookie => cookie.split(';')[0])
 		.join('; ');
+}
+
+export function cookieValue(res: request.Response, name: string): string {
+	const cookie = parseCookies(res).split('; ').find(value => value.startsWith(`${name}=`));
+	if (!cookie) throw new Error(`Missing ${name} cookie`);
+	return cookie.slice(name.length + 1);
 }
 
 export async function createUser(name: string): Promise<TestUser> {

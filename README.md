@@ -27,12 +27,15 @@ collabflow/
 ## Setup
 1. Clone the repo
 2. Copy `backend/.env.example` to `backend/.env` and fill in values
-3. Run `npm install` inside `backend/`
-4. Run `npm run dev` to start development server
+3. Prepare PostgreSQL with `backend/schema.sql` and the numbered
+   [database migrations](backend/migrations/README.md)
+4. Run `npm install` inside `backend/`
+5. Run `npm run dev` to start development server
 
 ## Environment Variables
 ```
 JWT_SECRET=
+JWT_REFRESH_SECRET=
 DB_USER=
 DB_HOST=
 DB_DATABASE=
@@ -53,8 +56,8 @@ npm --prefix backend test -- --runInBand
 ```
 
 See [backend/TESTING.md](backend/TESTING.md) for isolation safeguards, focused test
-commands, and remaining authentication work. GitHub Actions runs backend tests
-and builds, plus frontend lint and build checks, on pushes and pull requests.
+commands and coverage limits. GitHub Actions runs backend tests and builds, plus
+frontend tests, lint, and build checks, on pushes and pull requests.
 
 ## API Endpoints
 
@@ -62,8 +65,8 @@ and builds, plus frontend lint and build checks, on pushes and pull requests.
 - `POST /auth/register` — register a new user
 - `POST /auth/login` — login and receive JWT token
 - `GET /auth/me` — get current authenticated user
-- `POST /auth/refresh` — issue an access token using the refresh cookie
-- `POST /auth/logout` — clear browser authentication cookies
+- `POST /auth/refresh` — rotate the refresh token and issue an access token
+- `POST /auth/logout` — revoke the current session and clear authentication cookies
 
 ### Projects
 - `GET /projects` — get all projects for logged in user
@@ -107,6 +110,7 @@ and builds, plus frontend lint and build checks, on pushes and pull requests.
 - `projects` — id, title, owner_id
 - `project_members` — user_id, project_id, role
 - `tasks` — id, title, description, project_id, assigned_to, created_by, status, deadline, created_at
+- `auth_sessions` — id, user_id, refresh_token_hash, created_at, expires_at, revoked_at
 
 ## Key Design Decisions
 - Owner stored in `projects.owner_id`, not in `project_members` — avoids update anomalies
@@ -114,6 +118,8 @@ and builds, plus frontend lint and build checks, on pushes and pull requests.
 - `project_members.user_id` uses ON DELETE RESTRICT — users cannot be deleted while active members
 - `tasks.assigned_to` uses ON DELETE SET NULL — deleting a user unassigns their tasks
 - Role-based authorization via reusable `hasRole` middleware
+- Refresh-token rotation uses transactional row locks; replay and logout revoke
+  the current session's access and refresh tokens without ending other device logins
 
 ## Planned Improvements
 

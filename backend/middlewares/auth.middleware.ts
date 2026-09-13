@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { verifyAccessToken } from '../services/token.service';
-import { isUser } from '../services/users.service';
+import { getSessionUser } from '../services/sessions.service';
 import { AppError } from '../utils/AppError';
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -25,14 +25,16 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction): 
 		// verified with JWT_SECRET — never with JWT_REFRESH_SECRET.
 		const decoded = verifyAccessToken(token);
 
-		if (!(await isUser(decoded.id))) {
-			return next(new AppError('User no longer exists', 401));
+		const user = await getSessionUser(decoded.id, decoded.sid);
+		if (!user) {
+			return next(new AppError('Invalid or expired session', 401));
 		}
 
-		req.user = decoded;
+		req.user = user;
+		res.set('Cache-Control', 'no-store');
 		next();
 	} catch (err) {
-		return next(new AppError('Invalid or expired token', 401))
+		next(err);
 	}
 }
 

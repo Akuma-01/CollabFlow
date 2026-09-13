@@ -3,19 +3,13 @@ import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import pool from '../config/db';
 import app from '../server';
-import { parseCookies, useTestDatabase } from '../test/helpers';
+import { cookieValue, parseCookies, useTestDatabase } from '../test/helpers';
 
 const BASE_USER = { name: 'Alice', email: 'alice@test.com', password: 'secret123' };
 useTestDatabase();
 
 async function login(): Promise<request.Response> {
 	return request(app).post('/auth/login').send(BASE_USER).expect(200);
-}
-
-function cookieValue(res: request.Response, name: string): string {
-	const cookie = parseCookies(res).split('; ').find(value => value.startsWith(`${name}=`));
-	if (!cookie) throw new Error(`Missing ${name} cookie`);
-	return cookie.slice(name.length + 1);
 }
 
 describe('POST /auth/register', () => {
@@ -64,7 +58,7 @@ describe('Authentication sessions', () => {
 		const cookies = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
 		expect(cookies).toEqual(expect.arrayContaining([
 			expect.stringMatching(/^token=.*Max-Age=900;.*HttpOnly; SameSite=Lax$/),
-			expect.stringMatching(/^refresh_token=.*Max-Age=604800;.*HttpOnly; SameSite=Lax$/),
+			expect.stringMatching(/^refresh_token=.*Expires=.*HttpOnly; SameSite=Lax$/),
 		]));
 		for (const [name, secret, lifetime] of [
 			['token', process.env.JWT_SECRET!, 900],

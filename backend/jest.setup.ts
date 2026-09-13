@@ -3,3 +3,4 @@ process.env.NODE_ENV = 'test';
 delete process.env.DATABASE_URL;
 process.env.JWT_SECRET = 'collabflow-test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'collabflow-test-refresh-secret';
+process.env.FRONTEND_URL = 'http://localhost:3001';

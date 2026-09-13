@@ -12,8 +12,8 @@ that separates routing, business logic, and data access.
 Every request passes through the following layers in order:
 
 1. **Router** — matches the URL to the correct route handler (auth, projects, tasks)
-2. **Auth Middleware** — validates the JWT token from the Authorization header 
-   and attaches the decoded user to `req.user`
+2. **Auth Middleware** — validates the access JWT from its cookie or Bearer header,
+   checks the persisted session, and attaches current user details to `req.user`
 3. **Role Middleware** — queries `project_members` and `projects` tables to verify 
    the user has sufficient role for that route (owner, editor, viewer, or guide)
 4. **Controller** — validates request inputs and calls the appropriate service
@@ -22,10 +22,13 @@ Every request passes through the following layers in order:
    JSON error response
 
 ## Database Design
-Four core tables: `users`, `projects`, `project_members`, and `tasks`.
+Four project-management tables (`users`, `projects`, `project_members`, `tasks`)
+and `auth_sessions` for authentication. New tables are introduced through
+[additive SQL migrations](migrations/README.md) after the baseline `schema.sql`.
 
 - `project_members` references both `projects` and `users` via foreign keys
 - `tasks` references both `projects` and `users` (for assigned_to and created_by)
+- `auth_sessions` references `users` and is deleted when its user is deleted
 
 Key constraint decisions:
 - `project_members.project_id` → ON DELETE CASCADE: deleting a project removes 
@@ -44,11 +47,39 @@ the provided password is compared against the stored hash. If valid, a
 signed access JWT is set in an HttpOnly cookie with a 15-minute expiry, alongside
 a 7-day refresh-token cookie signed with a separate secret. Access tokens can
 also be supplied as Bearer tokens. Every protected route passes
-through auth middleware which verifies the token and attaches the decoded 
-user to `req.user`.
+through auth middleware which verifies the signature, HS256 algorithm, token type,
+and session claims. It then joins the active session to the user. This replaces
+the old user-existence query rather than adding another database round trip.
 
-Refresh looks up current user details before issuing an access token. Logout
-clears the browser cookies; server-side session revocation is not yet implemented.
+Each login creates an independent session with a random UUID and a seven-day
+absolute expiry. The database stores a SHA-256 digest of the current refresh
+token. Each refresh token has a random token ID and carries a signed session ID.
+Refresh locks that session row with `SELECT ... FOR UPDATE`, compares the digest,
+and replaces it in a transaction before issuing cookies. The new refresh cookie
+retains the original expiry. Replaying a correctly signed predecessor revokes the
+entire session; revocation is committed before returning 401. This follows the
+rotation/replay model described in [RFC 9700, section 4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2).
+
+Logout revokes the presented session before clearing cookies. An older rotated
+refresh token can identify the session for logout, with a valid access token as
+a fallback. Every protected request checks that session, so copied access tokens
+also stop working after logout or replay revocation. Requests already authorized
+before revocation may finish. Other device logins remain active. Database failures
+return a server error instead of being disguised as invalid credentials.
+
+The frontend shares one pending refresh among parallel requests and coordinates
+cookie-changing requests across tabs using the [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API).
+It rechecks `/auth/me` under the lock, then refreshes only if still needed. Login
+and logout use the same lock, and original API requests retry at most once. Without
+Web Locks, serialization is limited to the current tab; competing tabs or external
+clients can trigger strict replay revocation and require a new login. A response
+lost after rotation commits can also require signing in again; there is no grace
+period accepting a previously consumed token.
+
+Auth POSTs check browser Origin against `FRONTEND_URL`, which protects refresh
+and logout from cross-origin form submissions when cookies use SameSite=None.
+Session responses and authenticated reads use `Cache-Control: no-store`.
+
 Role checks query current project membership, so role changes and removals take
 effect without waiting for access tokens to expire. Assigned-task listings also
 check current project access.

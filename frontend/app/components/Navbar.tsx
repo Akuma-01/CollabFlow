@@ -3,16 +3,27 @@
 import { api } from "@/lib/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from 'react';
 
 export default function Navbar() {
 	const router = useRouter();
 	const pathname = usePathname();
+	const [signingOut, setSigningOut] = useState(false);
+	const [logoutError, setLogoutError] = useState<string | null>(null);
 
 	if (pathname === "/login" || pathname === "/register") return null;
 
 	const handleLogout = async () => {
-		await api.post("/auth/logout").catch(() => { });
-		router.replace("/login");
+		setSigningOut(true);
+		setLogoutError(null);
+		try {
+			await api.post('/auth/logout');
+			router.replace('/login');
+		} catch {
+			setLogoutError('Could not sign out. Please try again.');
+		} finally {
+			setSigningOut(false);
+		}
 	};
 
 	const isActive = (path: string) => pathname === path;
@@ -46,11 +57,13 @@ export default function Navbar() {
 				</div>
 
 				{/* Right */}
+				{logoutError && <p role="alert" className="text-sm text-red-600">{logoutError}</p>}
 				<button
 					onClick={handleLogout}
+					disabled={signingOut}
 					className="rounded-lg border border-gray-200 px-3.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
 				>
-					Sign out
+					{signingOut ? 'Signing out…' : 'Sign out'}
 				</button>
 			</nav>
 		</header>

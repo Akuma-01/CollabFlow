@@ -1,5 +1,5 @@
 const { randomBytes } = require('node:crypto');
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync } = require('node:fs');
 const path = require('node:path');
 const dotenv = require('dotenv');
 const { Client } = require('pg');
@@ -27,6 +27,10 @@ module.exports = async () => {
     try {
       await client.connect();
       await client.query(readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8'));
+      const migrations = path.join(__dirname, '..', 'migrations');
+      for (const file of readdirSync(migrations).filter(file => file.endsWith('.sql')).sort()) {
+        await client.query(readFileSync(path.join(migrations, file), 'utf8'));
+      }
     } finally {
       await client.end();
     }
