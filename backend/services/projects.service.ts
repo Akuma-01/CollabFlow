@@ -1,6 +1,8 @@
 import pool from '../config/db';
 import { Project, ProjectMember, ProjectRole } from '../types';
 import { AppError } from '../utils/AppError';
+import { withTransaction } from '../utils/transaction';
+import * as activityService from './activity.service';
 
 export const getProjectById = async (project_id: number): Promise<Project | undefined> => {
 	const result = await pool.query('SELECT * FROM projects WHERE id = $1', [project_id]);
@@ -71,11 +73,17 @@ export const getProjectDetails = async (project_id: number): Promise<Project | u
 };
 
 export const createProject = async (title: string, owner_id: number): Promise<Project> => {
-	const result = await pool.query(
-		'INSERT INTO projects (title, owner_id) VALUES ($1, $2) RETURNING *;',
-		[title, owner_id]
-	);
-	return result.rows[0];
+	return withTransaction(async client => {
+		const result = await client.query(
+			'INSERT INTO projects (title, owner_id) VALUES ($1, $2) RETURNING *;',
+			[title, owner_id]
+		);
+		const project = result.rows[0];
+		await activityService.log(client, {
+			projectId: project.id, actorId: owner_id, action: 'PROJECT_CREATED', metadata: { title },
+		});
+		return project;
+	});
 };
 
 export const deleteProject = async (project_id: number): Promise<Project | undefined> => {
@@ -86,12 +94,22 @@ export const deleteProject = async (project_id: number): Promise<Project | undef
 	return result.rows[0];
 };
 
-export const updateProject = async (project_id: number, title: string): Promise<Project | undefined> => {
-	const result = await pool.query(
-		`UPDATE projects SET title = $1 WHERE id = $2 RETURNING *`,
-		[title, project_id]
-	);
-	return result.rows[0];
+export const updateProject = async (project_id: number, title: string, actorId: number): Promise<Project> => {
+	return withTransaction(async client => {
+		// Serialize renames so the recorded old title is the one actually replaced.
+		const { rows } = await client.query('SELECT * FROM projects WHERE id = $1 FOR UPDATE', [project_id]);
+		const previous = rows[0];
+		if (!previous) throw new AppError('Project not found', 404);
+		if (previous.owner_id !== actorId) throw new AppError('Insufficient role', 403);
+		if (previous.title === title) return previous;
+
+		const result = await client.query('UPDATE projects SET title = $1 WHERE id = $2 RETURNING *', [title, project_id]);
+		await activityService.log(client, {
+			projectId: project_id, actorId, action: 'PROJECT_UPDATED',
+			metadata: { from: { title: previous.title }, to: { title } },
+		});
+		return result.rows[0];
+	});
 };
 
 

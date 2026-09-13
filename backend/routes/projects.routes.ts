@@ -4,6 +4,7 @@ import hasRole from '../middlewares/hasRole.middleware';
 import validate from '../middlewares/validate';
 import { addGuideSchema, addMemberSchema, updateMemberRoleSchema } from '../schemas/member.schema';
 import { createProjectSchema, updateProjectSchema } from '../schemas/project.schema';
+import { getActivity } from '../controllers/activity.controller';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ router.get('/', authMiddleware, getProjects);
 router.post('/', authMiddleware, validate(createProjectSchema), createProject);
 
 router.get('/:projectId', authMiddleware, hasRole(["viewer", "editor", "owner", "guide"]), getProjectDetails);
+router.get('/:projectId/activity', authMiddleware, hasRole(['owner', 'editor', 'viewer', 'guide']), getActivity);
 
 router.delete('/:projectId', authMiddleware, hasRole(["owner"]), deleteProject);
 

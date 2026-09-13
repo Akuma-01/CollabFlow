@@ -74,6 +74,7 @@ frontend tests, lint, and build checks, on pushes and pull requests.
 - `GET /projects/:projectId` — get project details with task counts
 - `PATCH /projects/:projectId` — update project title
 - `DELETE /projects/:projectId` — delete project
+- `GET /projects/:projectId/activity` — paginated project creation/rename history
 
 ### Members
 - `GET /projects/:projectId/members` — list project members
@@ -111,6 +112,8 @@ frontend tests, lint, and build checks, on pushes and pull requests.
 - `project_members` — user_id, project_id, role
 - `tasks` — id, title, description, project_id, assigned_to, created_by, status, deadline, created_at
 - `auth_sessions` — id, user_id, refresh_token_hash, created_at, expires_at, revoked_at
+- `activity_logs` — project/actor, action, entity, JSONB metadata, timestamp;
+  see [activity API and transaction rules](backend/ACTIVITY.md)
 
 ## Key Design Decisions
 - Owner stored in `projects.owner_id`, not in `project_members` — avoids update anomalies

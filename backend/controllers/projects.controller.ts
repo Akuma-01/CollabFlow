@@ -78,7 +78,7 @@ export const updateProject = async (req: Request, res: Response, next: NextFunct
 		return;
 	}
 	try {
-		const data = await projectService.updateProject(project_id, title);
+		const data = await projectService.updateProject(project_id, title, req.user.id);
 		if (!data) {
 			return next({ status: 404, message: "Project not found" });
 		}

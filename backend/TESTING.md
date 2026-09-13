@@ -47,8 +47,8 @@ is a separate set of focused middleware unit tests with a mocked service.
 
 ## Coverage
 
-The backend suite currently passes **100 PostgreSQL integration tests and 6
-middleware unit tests** (106 total). The frontend has **11 API-client tests**.
+The backend includes PostgreSQL integration tests and 6 middleware unit tests.
+The frontend has 11 API-client tests. Jest reports the current backend total.
 
 - Authentication: password hashing, duplicate and concurrent registration,
   validation, cookie flags and token lifetimes, cookies/Bearer access,
@@ -66,18 +66,22 @@ middleware unit tests** (106 total). The frontend has **11 API-client tests**.
   assignees; removal of access to assigned tasks after membership removal.
 - Concurrency: simultaneous registration, member addition, and guide addition
   assert both response outcomes and persisted uniqueness.
+- Activity: project creation/rename history, actor snapshots, no-op suppression,
+  project access, filtered cursor pagination, bigint precision, concurrent rename
+  transitions, rollback when logging fails, migration reapplication, and retention.
 
 Run one area while developing:
 
 ```sh
 npm --prefix backend test -- --runInBand isolation
+npm --prefix backend test -- --runInBand activity
 npm --prefix backend run test:watch -- auth
 ```
 
 ## CI and remaining work
 
 `.github/workflows/ci.yml` runs the same integration tests against a PostgreSQL
-service and builds the backend on pushes and pull requests. A second job lints
+service and builds the backend on pushes and pull requests. A second job lints,
 tests and builds the frontend. No application or deployment secrets are needed.
 
 The frontend API-client tests exercise the actual client with controlled fetch
@@ -93,6 +97,6 @@ npm --prefix frontend run build
 ```
 
 Authentication rate limiting is disabled in the integration environment and is
-not covered by this suite. Audit logs, comments, and WebSockets need tests when
-implemented. Existing databases require the [session migration](migrations/README.md)
-before starting this version; users with legacy tokens must sign in again.
+not covered by this suite. Task/membership activity, comments, and WebSockets need
+tests when implemented. Apply the [database migrations](migrations/README.md)
+before starting this version on an existing database.

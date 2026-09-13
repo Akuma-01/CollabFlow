@@ -9,7 +9,7 @@ export interface TestUser {
 
 export function useTestDatabase(): void {
 	beforeEach(async () => {
-		await pool.query('TRUNCATE auth_sessions, project_members, tasks, projects, users RESTART IDENTITY');
+		await pool.query('TRUNCATE activity_logs, auth_sessions, project_members, tasks, projects, users RESTART IDENTITY');
 	});
 	afterAll(async () => {
 		await pool.end();

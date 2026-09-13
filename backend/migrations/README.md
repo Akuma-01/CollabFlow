@@ -4,11 +4,12 @@
 numbered SQL files in this directory in filename order after loading that baseline
 on a new database. Existing databases only need the new migration files.
 
-For this checkpoint, apply `001_auth_sessions.sql` **before** starting the new API:
+Apply any unapplied migrations **before** starting the new API:
 
 ```sh
 # From the repository root, with DATABASE_URL already set in your shell:
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/migrations/001_auth_sessions.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/migrations/002_activity_logs.sql
 ```
 
 Alternatively use the standard PostgreSQL `PGHOST`, `PGPORT`, `PGUSER`,
@@ -16,13 +17,17 @@ Alternatively use the standard PostgreSQL `PGHOST`, `PGPORT`, `PGUSER`,
 The shell does not automatically load `backend/.env`.
 
 For a new database, first run `psql` with the same connection settings and
-`-v ON_ERROR_STOP=1 -f backend/schema.sql`, then apply the migration above.
-`001_auth_sessions.sql` uses a transaction and can be rerun. It adds a table and
-indexes without changing existing users, projects, memberships, or tasks.
+`-v ON_ERROR_STOP=1 -f backend/schema.sql`, then apply the migrations above.
+Both migrations use transactions and can be rerun. They add tables and indexes
+without changing existing users, projects, memberships, or tasks.
 Integration test setup applies the baseline and all numbered SQL files to each
-disposable test database, including a regression test for reapplying migration 001.
+disposable test database, including regression tests for reapplying both migrations.
 
-## Rollout behavior
+Migration 002 introduces [project activity](../ACTIVITY.md). It does not backfill
+historical events, and it does not change authentication sessions. If migration
+001 is already deployed, only 002 is needed for this checkpoint.
+
+## Session migration rollout (001)
 
 Deploy the API and frontend changes together after applying the migration. Old
 access and refresh tokens have no persisted session and are rejected; existing

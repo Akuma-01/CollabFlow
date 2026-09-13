@@ -23,12 +23,15 @@ Every request passes through the following layers in order:
 
 ## Database Design
 Four project-management tables (`users`, `projects`, `project_members`, `tasks`)
-and `auth_sessions` for authentication. New tables are introduced through
+plus `auth_sessions` for authentication and `activity_logs` for project history.
+New tables are introduced through
 [additive SQL migrations](migrations/README.md) after the baseline `schema.sql`.
 
 - `project_members` references both `projects` and `users` via foreign keys
 - `tasks` references both `projects` and `users` (for assigned_to and created_by)
 - `auth_sessions` references `users` and is deleted when its user is deleted
+- `activity_logs` belongs to a project and snapshots the actor's name; actor
+  deletion nulls its user reference, while project deletion removes its history
 
 Key constraint decisions:
 - `project_members.project_id` → ON DELETE CASCADE: deleting a project removes 
@@ -91,6 +94,12 @@ Owners bypass the membership check entirely. This allows route-level
 permission control with a single reusable middleware.
 
 ## Key Design Decisions
+
+Project creation and renaming use a shared transaction helper to write the
+project change and activity record atomically. Renames lock the project row before
+reading the previous title. A read-only history endpoint uses project-scoped,
+indexed cursor pagination. See [the activity API](ACTIVITY.md) for event schemas
+and retention rules. Task/member events and the frontend feed are upcoming.
 
 **1. ON DELETE CASCADE for project-related data**
 When a project is deleted, all associated members and tasks are automatically 
