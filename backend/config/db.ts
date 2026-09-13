@@ -1,11 +1,12 @@
-import dotenv from 'dotenv';
-import path from 'path';
+import './env';
 import { Pool } from 'pg';
 
-dotenv.config({
-	path: path.resolve(__dirname, '..', process.env.NODE_ENV === 'test' ? '.env.test' : '.env'),
-	override: true,
-});
+if (process.env.NODE_ENV === 'test' && (
+	!/^collabflow_test_[a-f0-9]{24}$/.test(process.env.DB_DATABASE ?? '') ||
+	process.env.DB_DATABASE !== process.env.COLLABFLOW_TEST_DATABASE
+)) {
+	throw new Error('Tests must use the disposable database created by Jest globalSetup');
+}
 
 const pool = new Pool(
 	process.env.DATABASE_URL && process.env.NODE_ENV !== 'test'

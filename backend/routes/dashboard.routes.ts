@@ -5,6 +5,6 @@ import authMiddleware from '../middlewares/auth.middleware';
 const router = Router();
 
 router.get('/', authMiddleware, getDashboard);
-router.get('/', authMiddleware, getMyTasks);
+router.get('/tasks', authMiddleware, getMyTasks);
 
 export default router;

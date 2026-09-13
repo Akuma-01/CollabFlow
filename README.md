@@ -40,12 +40,30 @@ DB_PASSWORD=
 DB_PORT=
 ```
 
+## Tests and CI
+
+The backend uses Jest and Supertest against real PostgreSQL. Each run creates a
+fresh database from `backend/schema.sql`, covering authentication, role boundaries,
+cross-project isolation, and concurrent duplicate requests.
+
+```sh
+docker compose -f compose.test.yml up -d --wait
+npm --prefix backend ci
+npm --prefix backend test -- --runInBand
+```
+
+See [backend/TESTING.md](backend/TESTING.md) for isolation safeguards, focused test
+commands, and remaining authentication work. GitHub Actions runs backend tests
+and builds, plus frontend lint and build checks, on pushes and pull requests.
+
 ## API Endpoints
 
 ### Auth
 - `POST /auth/register` — register a new user
 - `POST /auth/login` — login and receive JWT token
 - `GET /auth/me` — get current authenticated user
+- `POST /auth/refresh` — issue an access token using the refresh cookie
+- `POST /auth/logout` — clear browser authentication cookies
 
 ### Projects
 - `GET /projects` — get all projects for logged in user

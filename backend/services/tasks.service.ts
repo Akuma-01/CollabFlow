@@ -159,7 +159,7 @@ export const updateTask = async (
 	title?: string,
 	description?: string,
 	deadline?: string
-): Promise<Task | undefined> => {
+): Promise<Task> => {
 	const fields: string[] = [];
 	const values: unknown[] = [];
 	let index = 1;
@@ -186,6 +186,10 @@ export const updateTask = async (
 		`UPDATE tasks SET ${fields.join(', ')} WHERE id = $${index++} AND project_id = $${index} RETURNING *`,
 		values
 	);
+
+	if (result.rowCount === 0) {
+		throw new AppError('Task not found', 404);
+	}
 
 	return result.rows[0];
 }
@@ -215,6 +219,10 @@ export const getAssignedTasks = async (user_id: number) => {
 			FROM tasks t
 			JOIN projects p ON p.id = t.project_id
 			WHERE t.assigned_to = $1
+				AND (p.owner_id = $1 OR EXISTS (
+					SELECT 1 FROM project_members pm
+					WHERE pm.project_id = p.id AND pm.user_id = $1
+				))
 			ORDER BY t.deadline ASC NULLS LAST
 		`, [user_id]
 	);

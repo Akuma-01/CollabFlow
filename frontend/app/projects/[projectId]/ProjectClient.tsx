@@ -65,17 +65,18 @@ function MemberPanel({
 	useEffect(() => { if (showForm) inputRef.current?.focus(); }, [showForm]);
 
 	useEffect(() => {
-		if (search.length < 2) { setResults([]); return; }
+		if (search.length < 2 || selected || !showForm) return;
+		let cancelled = false;
 		const t = setTimeout(async () => {
 			setSearching(true);
 			try {
 				const res = await api.get<{ data: typeof results }>(`/users/search?q=${encodeURIComponent(search)}`);
-				setResults(res.data);
-			} catch { setResults([]); }
-			finally { setSearching(false); }
+				if (!cancelled) setResults(res.data);
+			} catch { if (!cancelled) setResults([]); }
+			finally { if (!cancelled) setSearching(false); }
 		}, 300);
-		return () => clearTimeout(t);
-	}, [search]);
+		return () => { cancelled = true; clearTimeout(t); };
+	}, [search, selected, showForm]);
 
 	const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -91,6 +92,7 @@ function MemberPanel({
 			setRole("");
 			setSearch("");
 			setResults([]);
+			setSearching(false);
 			setSelected(null);
 			setShowForm(false);
 
@@ -128,7 +130,7 @@ function MemberPanel({
 							type="text"
 							placeholder="Search by name or email…"
 							value={search}
-							onChange={(e) => { setSearch(e.target.value); setSelected(null); }}
+							onChange={(e) => { setSearch(e.target.value); setSelected(null); setResults([]); setSearching(false); }}
 							className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
 						{selected && (
@@ -141,7 +143,7 @@ function MemberPanel({
 								{results.map(u => (
 									<li
 										key={u.id}
-										onClick={() => { setSelected(u); setSearch(u.email); setResults([]); }}
+										onClick={() => { setSelected(u); setSearch(u.email); setResults([]); setSearching(false); }}
 										className="px-3 py-2 cursor-pointer hover:bg-blue-50"
 									>
 										<span className="font-medium">{u.name}</span>
@@ -172,7 +174,7 @@ function MemberPanel({
 							</button>
 							<button
 								type="button"
-								onClick={() => { setShowForm(false); setError(null); setRole(""); setSearch(""); setSelected(null); setResults([]); }}
+								onClick={() => { setShowForm(false); setError(null); setRole(""); setSearch(""); setSelected(null); setResults([]); setSearching(false); }}
 								className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition"
 							>
 								Cancel

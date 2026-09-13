@@ -1,70 +1,25 @@
 import request from 'supertest';
-import pool from '../config/db';
+import { addMember, createProject, createTask, createUser, TestUser, useTestDatabase } from '../test/helpers';
 import app from '../server';
 
-const OWNER = { name: 'Owner', email: 'owner@test.com', password: 'secret123' };
-const EDITOR = { name: 'Editor', email: 'editor@test.com', password: 'secret123' };
-const VIEWER = { name: 'Viewer', email: 'viewer@test.com', password: 'secret123' };
-
-// Helper: extract cookie values stripped of attributes, ready to send back
-function parseCookies(res: request.Response): string {
-	return ([] as string[])
-		.concat(res.headers['set-cookie'] ?? [])
-		.map(c => c.split(';')[0])
-		.join('; ');
-}
-
-async function loginAs(user: typeof OWNER): Promise<{ cookies: string; id: number }> {
-	await request(app).post('/auth/register').send(user).catch(() => { });
-	const loginRes = await request(app).post('/auth/login').send({ email: user.email, password: user.password });
-	const cookies = parseCookies(loginRes);
-	const me = await request(app).get('/auth/me').set('Cookie', cookies);
-	return { cookies, id: me.body.data.id };
-}
-
-
-afterAll(async () => {
-	await pool.end();
-});
+useTestDatabase();
 
 describe('Tasks', () => {
-	let owner: { cookies: string; id: number };
-	let editor: { cookies: string; id: number };
-	let viewer: { cookies: string; id: number };
+	let owner: TestUser;
+	let editor: TestUser;
+	let viewer: TestUser;
 	let projectId: number;
 	let taskId: number;
 
 	beforeEach(async () => {
-		await pool.query('DELETE FROM project_members');
-		await pool.query('DELETE FROM tasks');
-		await pool.query('DELETE FROM projects');
-		await pool.query('DELETE FROM users');
+		owner = await createUser('Owner');
+		editor = await createUser('Editor');
+		viewer = await createUser('Viewer');
 
-		owner = await loginAs(OWNER);
-		editor = await loginAs(EDITOR);
-		viewer = await loginAs(VIEWER);
-
-		const proj = await request(app)
-			.post('/projects')
-			.set('Cookie', owner.cookies)
-			.send({ title: 'Task Project' });
-		projectId = proj.body.data.id;
-
-		await request(app)
-			.post(`/projects/${projectId}/members`)
-			.set('Cookie', owner.cookies)
-			.send({ user_id: editor.id, role: 'editor' });
-
-		await request(app)
-			.post(`/projects/${projectId}/members`)
-			.set('Cookie', owner.cookies)
-			.send({ user_id: viewer.id, role: 'viewer' });
-
-		const task = await request(app)
-			.post(`/projects/${projectId}/tasks`)
-			.set('Cookie', owner.cookies)
-			.send({ title: 'First Task', description: 'desc' });
-		taskId = task.body.data.id;
+		projectId = await createProject(owner, 'Task Project');
+		await addMember(owner, projectId, editor, 'editor');
+		await addMember(owner, projectId, viewer, 'viewer');
+		taskId = await createTask(owner, projectId);
 	});
 
 	describe('POST /projects/:id/tasks', () => {

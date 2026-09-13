@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({
-	path: path.resolve(__dirname, '..', process.env.NODE_ENV === 'test' ? '.env.test' : '.env'),
-	override: true,
-});
+// Tests receive isolated credentials from Jest; deployed environment values win
+// over local .env defaults.
+if (process.env.NODE_ENV !== 'test') {
+	dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+}

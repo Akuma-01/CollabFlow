@@ -15,7 +15,7 @@ Every request passes through the following layers in order:
 2. **Auth Middleware** — validates the JWT token from the Authorization header 
    and attaches the decoded user to `req.user`
 3. **Role Middleware** — queries `project_members` and `projects` tables to verify 
-   the user has sufficient role for that route (owner, editor, or viewer)
+   the user has sufficient role for that route (owner, editor, viewer, or guide)
 4. **Controller** — validates request inputs and calls the appropriate service
 5. **Service** — executes raw SQL queries against PostgreSQL via a connection pool
 6. **Error Middleware** — catches any error from any layer and returns a consistent 
@@ -41,9 +41,17 @@ Key constraint decisions:
 Authentication uses JWT tokens issued on login. Passwords are hashed with 
 bcrypt before storage — plain text passwords are never stored. On login, 
 the provided password is compared against the stored hash. If valid, a 
-signed JWT is returned with a 1 hour expiry. Every protected route passes 
+signed access JWT is set in an HttpOnly cookie with a 15-minute expiry, alongside
+a 7-day refresh-token cookie signed with a separate secret. Access tokens can
+also be supplied as Bearer tokens. Every protected route passes
 through auth middleware which verifies the token and attaches the decoded 
 user to `req.user`.
+
+Refresh looks up current user details before issuing an access token. Logout
+clears the browser cookies; server-side session revocation is not yet implemented.
+Role checks query current project membership, so role changes and removals take
+effect without waiting for access tokens to expire. Assigned-task listings also
+check current project access.
 
 Authorization is enforced by the `hasRole` middleware. It accepts an array 
 of allowed roles and checks whether the requesting user is the project owner 
