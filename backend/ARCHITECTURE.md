@@ -108,7 +108,9 @@ audits their project task assignments atomically.
 
 A read-only history endpoint uses project-scoped, indexed cursor pagination.
 See [the activity API](ACTIVITY.md) for event schemas, locking tradeoffs, and
-retention rules. The frontend feed is upcoming.
+retention rules. The project's Activity view renders saved snapshots with filtered
+pagination. Each filter/refresh mounts a new feed, discarding prior pagination
+state and ignoring late responses; the shared API client handles session refresh.
 
 **1. ON DELETE CASCADE for project-related data**
 When a project is deleted, all associated members and tasks are automatically 

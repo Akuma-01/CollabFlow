@@ -5,6 +5,7 @@ import { Member, Project, Task, TaskStatus } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import ActivityPanel from './ActivityPanel';
 
 // Helpers ──────────────────────────────────────────────────────────────
 
@@ -526,6 +527,8 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 	const [tasks, setTasks] = useState<Task[]>([]);
 	const [members, setMembers] = useState<Member[]>([]);
 	const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+	const [view, setView] = useState<'board' | 'activity'>('board');
+	const [activityRevision, setActivityRevision] = useState(0);
 
 	useEffect(() => {
 		const load = async () => {
@@ -556,6 +559,7 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 	// Fixed: refetchMembers now has error handling so a network blip doesn't
 	// cause an unhandled promise rejection that crashes the member panel.
 	const refetchMembers = async () => {
+		setActivityRevision(value => value + 1);
 		try {
 			const res = await api.get<{ data: Member[] }>(`/projects/${projectId}/members`);
 			setMembers(res.data);
@@ -643,7 +647,7 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 							</span>
 							<span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
 								<span>👥</span>
-								{project.member_count} Member{project.member_count !== 1 ? "s" : ""}
+								{members.length} Member{members.length !== 1 ? "s" : ""}
 							</span>
 						</div>
 
@@ -680,14 +684,27 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 					projectId={projectId}
 					onMembersChanged={refetchMembers}
 				/>
-				<KanbanBoard
-					tasks={tasks}
-					members={members}
-					canEdit={canEdit}
-					canCreate={canCreate}
-					projectId={projectId}
-					onTasksChanged={setTasks}
-				/>
+				<div className="min-w-0 space-y-4">
+					<nav aria-label="Project views" className="flex gap-1 border-b border-gray-200 pb-2">
+						{(['board', 'activity'] as const).map(item => (
+							<button key={item} type="button" aria-pressed={view === item} onClick={() => setView(item)}
+								className={`rounded-lg px-4 py-2 text-sm font-medium transition ${view === item ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+								{item === 'board' ? 'Board' : 'Activity'}
+							</button>
+						))}
+					</nav>
+					<div hidden={view !== 'board'}>
+						<KanbanBoard
+							tasks={tasks}
+							members={members}
+							canEdit={canEdit}
+							canCreate={canCreate}
+							projectId={projectId}
+							onTasksChanged={setTasks}
+						/>
+					</div>
+					{view === 'activity' && <ActivityPanel projectId={projectId} revision={activityRevision} />}
+				</div>
 			</div>
 		</div>
 	);

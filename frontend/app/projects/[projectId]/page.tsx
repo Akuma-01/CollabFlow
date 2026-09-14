@@ -9,5 +9,5 @@ export default async function Page({
 }) {
 	const { projectId } = await params;
 
-	return <ProjectClient projectId={projectId} />;
+	return <ProjectClient key={projectId} projectId={projectId} />;
 }

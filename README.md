@@ -58,7 +58,18 @@ npm --prefix backend test -- --runInBand
 
 See [backend/TESTING.md](backend/TESTING.md) for isolation safeguards, focused test
 commands and coverage limits. GitHub Actions runs backend tests and builds, plus
-frontend tests, lint, and build checks, on pushes and pull requests.
+frontend API-client tests, lint, and Chromium tests of the production build on
+pushes and pull requests. See [frontend/TESTING.md](frontend/TESTING.md) for browser
+setup and coverage.
+
+## Project Activity
+
+Open **Activity** beside the project board to see task, membership, role, and
+project changes with actor names, timestamps, and before/after values. All project
+roles can read history. Filter by event type, load older events, or refresh for
+new changes. History survives task deletion and member removal; project deletion
+removes its history. See [the activity contract](backend/ACTIVITY.md) for the API,
+transaction guarantees, and retention rules.
 
 ## API Endpoints
 

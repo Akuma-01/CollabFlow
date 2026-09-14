@@ -67,4 +67,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      - run: npm run build
+      - run: npm run test:e2e:install
+      - run: npm run test:e2e
