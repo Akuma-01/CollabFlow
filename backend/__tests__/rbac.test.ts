@@ -113,5 +113,9 @@ describe('Role boundaries through the API', () => {
 		expect(responses.map(res => res.status).sort()).toEqual(endpoint === 'members' ? [201, 409, 409] : [201, 400, 400]);
 		const { rows } = await pool.query('SELECT * FROM project_members WHERE user_id = $1', [newcomer.id]);
 		expect(rows).toEqual([{ user_id: newcomer.id, project_id: projectId, role: endpoint === 'members' ? 'editor' : 'guide' }]);
+		expect((await pool.query(
+			"SELECT id FROM activity_logs WHERE project_id = $1 AND entity_id = $2 AND action = 'MEMBER_ADDED'",
+			[projectId, newcomer.id]
+		)).rowCount).toBe(1);
 	});
 });

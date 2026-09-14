@@ -53,7 +53,7 @@ export const deleteProject = async (req: Request, res: Response, next: NextFunct
 			return next({ status: 400, message: "Valid project ID is required" });
 		}
 
-		const deletedProject = await projectService.deleteProject(project_id);
+		const deletedProject = await projectService.deleteProject(project_id, req.user.id);
 		if (!deletedProject) {
 			return next({ status: 404, message: "Project not found" });
 		}
@@ -110,8 +110,8 @@ export const createProjectMember = async (req: Request, res: Response, next: Nex
 		const newProjectMember = await projectService.createProjectMember({
 			project_id,
 			user_id: userId,
-			role: role as ProjectRole
-		});
+			role: role as Exclude<ProjectRole, 'owner'>
+		}, req.user.id);
 
 		res.status(201).json({
 			success: true,
@@ -155,7 +155,7 @@ export const removeMember = async (req: Request, res: Response, next: NextFuncti
 	}
 
 	try {
-		const removedMember = await projectService.removeMember(project_id, user_id);
+		const removedMember = await projectService.removeMember(project_id, user_id, req.user.id);
 
 		if (!removedMember) {
 			return next({ status: 404, message: "User not found" });
@@ -182,7 +182,7 @@ export const updateMemberRole = async (req: Request, res: Response, next: NextFu
 	}
 
 	try {
-		const updatedMember = await projectService.updateMemberRole(project_id, user_id, role as ProjectRole);
+		const updatedMember = await projectService.updateMemberRole(project_id, user_id, role as Exclude<ProjectRole, 'owner'>, req.user.id);
 
 		if (!updatedMember) {
 			return next({ status: 404, message: "User not found" });
@@ -207,7 +207,7 @@ export const addGuide = async (req: Request, res: Response, next: NextFunction):
 	const userId = Number(user_id);
 
 	try {
-		const guide = await projectService.addGuide(project_id, userId);
+		const guide = await projectService.addGuide(project_id, userId, req.user.id);
 		res.status(201).json({ success: true, data: guide });
 
 	} catch (err) {

@@ -40,19 +40,23 @@ describe('Project resource isolation', () => {
 		['delete', '', {}],
 	])('cannot %s another project’s task through an authorized project URL', async (action, suffix, body) => {
 		const before = (await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId])).rows[0];
+		const activityBefore = (await pool.query('SELECT * FROM activity_logs ORDER BY id')).rows;
 		const path = `/projects/${otherProject}/tasks/${taskId}${suffix}`;
 		const query = action === 'delete' ? request(app).delete(path) : request(app).patch(path).send(body);
 		await query.set('Cookie', outsider.cookies).expect(404);
 		const after = (await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId])).rows[0];
 		expect(after).toEqual(before);
+		expect((await pool.query('SELECT * FROM activity_logs ORDER BY id')).rows).toEqual(activityBefore);
 	});
 
 	it.each(['change role', 'remove'])('cannot %s for a member of another project', async action => {
+		const activityBefore = (await pool.query('SELECT * FROM activity_logs ORDER BY id')).rows;
 		const path = `/projects/${otherProject}/members/${member.id}`;
 		const query = action === 'remove' ? request(app).delete(path) : request(app).patch(path).send({ role: 'viewer' });
 		await query.set('Cookie', outsider.cookies).expect(404);
 		const { rows } = await pool.query('SELECT * FROM project_members WHERE user_id = $1', [member.id]);
 		expect(rows).toEqual([{ user_id: member.id, project_id: privateProject, role: 'editor' }]);
+		expect((await pool.query('SELECT * FROM activity_logs ORDER BY id')).rows).toEqual(activityBefore);
 	});
 
 	it.each(['create', 'assign'])('cannot %s a task assigned to a user outside the project', async action => {

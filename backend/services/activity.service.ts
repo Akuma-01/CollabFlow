@@ -2,22 +2,15 @@ import { PoolClient } from 'pg';
 import pool from '../config/db';
 import { ActivityQuery } from '../schemas/activity.schema';
 import { AppError } from '../utils/AppError';
-
-type ProjectActivity = {
-	projectId: number;
-	actorId: number;
-} & (
-	{ action: 'PROJECT_CREATED'; metadata: { title: string } } |
-	{ action: 'PROJECT_UPDATED'; metadata: { from: { title: string }; to: { title: string } } }
-);
+import { ActivityEvent } from '../types/activity';
 
 // Require the mutation's transaction client. Actor identity and metadata are
 // supplied by services; callers cannot create activity through the HTTP API.
-export async function log(client: PoolClient, event: ProjectActivity): Promise<void> {
+export async function log(client: PoolClient, event: ActivityEvent): Promise<void> {
 	const result = await client.query(
 		`INSERT INTO activity_logs (project_id, actor_id, actor_name, action, entity_type, entity_id, metadata)
-		 SELECT $1, u.id, u.name, $3, 'project', $1, $4::jsonb FROM users u WHERE u.id = $2`,
-		[event.projectId, event.actorId, event.action, JSON.stringify(event.metadata)]
+		 SELECT $1, u.id, u.name, $3, $4, $5, $6::jsonb FROM users u WHERE u.id = $2`,
+		[event.projectId, event.actorId, event.action, event.entityType, event.entityId, JSON.stringify(event.metadata)]
 	);
 	if (result.rowCount !== 1) throw new AppError('Activity actor no longer exists', 401);
 }

@@ -1,6 +1,53 @@
 import pool from '../config/db';
-import { Task, TaskStatus } from '../types';
+import { PoolClient } from 'pg';
+import { Project, Task, TaskStatus } from '../types';
+import { AssignmentReason, PersonSnapshot, TaskChanges } from '../types/activity';
+import { withProjectTransaction } from '../utils/projectTransaction';
+import * as activityService from './activity.service';
 import { AppError } from '../utils/AppError';
+
+type Assignee = PersonSnapshot & { email: string };
+type TaskRow = Omit<Task, 'description' | 'deadline' | 'assigned_to'> & {
+	description: string | null;
+	deadline: Date | null;
+	assigned_to: number | null;
+};
+type StoredTask = TaskRow & { assigned_to_name: string | null; assigned_to_email: string | null };
+
+function decorateTask(task: TaskRow, assignee: Assignee | null): StoredTask {
+	return { ...task, assigned_to_name: assignee?.name ?? null, assigned_to_email: assignee?.email ?? null };
+}
+
+function snapshot(assignee: PersonSnapshot | null): PersonSnapshot | null {
+	return assignee ? { id: assignee.id, name: assignee.name } : null;
+}
+
+async function getTask(client: PoolClient, taskId: number, projectId: number) {
+	const { rows } = await client.query<StoredTask & { deadline_day: string | null }>(
+		`SELECT t.*, u.name AS assigned_to_name, u.email AS assigned_to_email,
+		        to_char(t.deadline, 'YYYY-MM-DD') AS deadline_day
+		 FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to
+		 WHERE t.id = $1 AND t.project_id = $2 FOR UPDATE OF t`, [taskId, projectId]
+	);
+	if (!rows[0]) throw new AppError('Task not found', 404);
+	const { deadline_day, ...task } = rows[0];
+	return { task, deadlineDay: deadline_day };
+}
+
+async function getAssignee(client: PoolClient, project: Project, userId: number | null): Promise<Assignee | null> {
+	if (userId === null) return null;
+	const { rows } = await client.query<Assignee & { role: string | null }>(
+		`SELECT u.id, u.name, u.email, pm.role FROM users u
+		 LEFT JOIN project_members pm ON pm.user_id = u.id AND pm.project_id = $1
+		 WHERE u.id = $2`, [project.id, userId]
+	);
+	const assignee = rows[0];
+	if (!assignee || (userId !== project.owner_id && !assignee.role)) {
+		throw new AppError('User is not a member of this project', 403);
+	}
+	if (assignee.role === 'guide') throw new AppError('Cannot assign task to a guide', 403);
+	return assignee;
+}
 
 export const createTask = async (
 	title: string,
@@ -9,50 +56,20 @@ export const createTask = async (
 	created_by: number,
 	deadline?: string,
 	assigned_to?: number | null,
-): Promise<Task> => {
-	// assigned_to is now accepted and written on creation.
-	// If provided, we validate the assignee is a non-guide member first.
-	if (assigned_to != null) {
-		const memberResult = await pool.query(
-			`SELECT p.owner_id, pm.role AS member_role
-			 FROM projects p
-			 LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
-			 WHERE p.id = $1`,
-			[project_id, assigned_to]
-		);
-		if (memberResult.rows.length === 0) {
-			throw new AppError('Project not found', 404);
-		}
-		const { owner_id, member_role } = memberResult.rows[0];
-		if (member_role === 'guide') {
-			throw new AppError('Cannot assign task to a guide', 403);
-		}
-		if (owner_id !== assigned_to && member_role === null) {
-			throw new AppError('User is not a member of this project', 403);
-		}
-	}
-
-	const result = await pool.query(
+): Promise<StoredTask> => withProjectTransaction(project_id, created_by, ['editor'], async (client, project) => {
+	const assignee = await getAssignee(client, project, assigned_to ?? null);
+	const { rows } = await client.query<TaskRow>(
 		`INSERT INTO tasks (title, description, project_id, created_by, deadline, assigned_to)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING *`,
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
 		[title, description ?? null, project_id, created_by, deadline ?? null, assigned_to ?? null]
 	);
-
-	// Return with joined assignee fields so the frontend doesn't need a refetch.
-	if (assigned_to != null) {
-		const withUser = await pool.query(
-			`SELECT t.*, u.name AS assigned_to_name, u.email AS assigned_to_email
-			 FROM tasks t
-			 LEFT JOIN users u ON u.id = t.assigned_to
-			 WHERE t.id = $1`,
-			[result.rows[0].id]
-		);
-		return withUser.rows[0];
-	}
-
-	return { ...result.rows[0], assigned_to_name: null, assigned_to_email: null };
-};
+	const task = decorateTask(rows[0], assignee);
+	await activityService.log(client, {
+		projectId: project_id, actorId: created_by, entityType: 'task', entityId: task.id,
+		action: 'TASK_CREATED', metadata: { title, status: task.status, deadline: deadline ?? null, assignee: snapshot(assignee) },
+	});
+	return task;
+});
 
 export const getProjectTasks = async (
 	project_id: number,
@@ -82,128 +99,89 @@ export const getProjectTasks = async (
 };
 
 export const assignTask = async (
-	task_id: number,
-	project_id: number,
-	assigned_to: number | null
-): Promise<Task> => {
-	const taskResult = await pool.query(
-		'SELECT * FROM tasks WHERE id = $1 AND project_id = $2',
-		[task_id, project_id]
-	);
-
-	if (taskResult.rows.length === 0) {
-		throw new AppError('Task not found or does not belong to this project', 404);
-	}
-
-	// Unassign
-	if (assigned_to === null) {
-		const result = await pool.query(
-			'UPDATE tasks SET assigned_to = NULL WHERE id = $1 AND project_id = $2 RETURNING *',
-			[task_id, project_id]
-		);
-		return result.rows[0];
-	}
-
-	const memberResult = await pool.query(
-		`SELECT p.owner_id, pm.role AS member_role
-		 FROM projects p
-		 LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
-		 WHERE p.id = $1`,
-		[project_id, assigned_to]
-	);
-
-	if (memberResult.rows.length === 0) {
-		throw new AppError('Project not found', 404);
-	}
-
-	const { owner_id, member_role } = memberResult.rows[0];
-	const isOwner = owner_id === assigned_to;
-	const isGuide = member_role === 'guide';
-	const isMember = member_role !== null;
-
-	if (isGuide) {
-		throw new AppError('Cannot assign task to a guide', 403);
-	}
-
-	if (!isOwner && !isMember) {
-		throw new AppError('User is not a member of this project', 403);
-	}
-
-	const result = await pool.query(
+	task_id: number, project_id: number, assigned_to: number | null, actorId: number
+): Promise<StoredTask> => withProjectTransaction(project_id, actorId, ['editor'], async (client, project) => {
+	const { task } = await getTask(client, task_id, project_id);
+	const assignee = await getAssignee(client, project, assigned_to);
+	if (task.assigned_to === assigned_to) return task;
+	const { rows } = await client.query<TaskRow>(
 		'UPDATE tasks SET assigned_to = $1 WHERE id = $2 AND project_id = $3 RETURNING *',
 		[assigned_to, task_id, project_id]
 	);
-	return result.rows[0];
-};
+	await activityService.log(client, {
+		projectId: project_id, actorId, entityType: 'task', entityId: task_id, action: 'TASK_ASSIGNED',
+		metadata: { title: task.title, from: task.assigned_to === null ? null : { id: task.assigned_to, name: task.assigned_to_name! }, to: snapshot(assignee) },
+	});
+	return decorateTask(rows[0], assignee);
+});
 
 export const updateTaskStatus = async (
-	task_id: number,
-	project_id: number,   // now required — prevents cross-project status updates
-	status: TaskStatus
-): Promise<Task> => {
-	const result = await pool.query(
-		// project_id added to WHERE so an editor of project A cannot
-		// update a task that belongs to project B.
-		'UPDATE tasks SET status=$1 WHERE id=$2 AND project_id=$3 RETURNING *',
-		[status, task_id, project_id]
+	task_id: number, project_id: number, status: TaskStatus, actorId: number
+): Promise<StoredTask> => withProjectTransaction(project_id, actorId, ['editor'], async client => {
+	const { task } = await getTask(client, task_id, project_id);
+	if (task.status === status) return task;
+	const { rows } = await client.query<TaskRow>(
+		'UPDATE tasks SET status = $1 WHERE id = $2 AND project_id = $3 RETURNING *', [status, task_id, project_id]
 	);
-	if (result.rowCount === 0) {
-		throw new AppError('Task not found', 404);
-	}
-	return result.rows[0];
-};
+	await activityService.log(client, {
+		projectId: project_id, actorId, entityType: 'task', entityId: task_id, action: 'TASK_MOVED',
+		metadata: { title: task.title, from: task.status, to: status },
+	});
+	return { ...task, ...rows[0] };
+});
 
 export const updateTask = async (
-	task_id: number,
-	project_id: number,
-	title?: string,
-	description?: string,
-	deadline?: string
-): Promise<Task> => {
-	const fields: string[] = [];
-	const values: unknown[] = [];
-	let index = 1;
-
-	if (title !== undefined) {
-		fields.push(`title = $${index++}`);
-		values.push(title);
-	}
-	if (description !== undefined) {
-		fields.push(`description = $${index++}`);
-		values.push(description);
-	}
-	if (deadline !== undefined) {
-		fields.push(`deadline = $${index++}`);
-		values.push(deadline);
-	}
-	if (fields.length === 0) {
+	task_id: number, project_id: number, actorId: number,
+	title?: string, description?: string, deadline?: string
+): Promise<StoredTask> => withProjectTransaction(project_id, actorId, ['editor'], async client => {
+	if (title === undefined && description === undefined && deadline === undefined) {
 		throw new AppError('No update data provided', 400);
 	}
-
-	values.push(task_id, project_id);
-
-	const result = await pool.query(
-		`UPDATE tasks SET ${fields.join(', ')} WHERE id = $${index++} AND project_id = $${index} RETURNING *`,
-		values
+	const { task, deadlineDay } = await getTask(client, task_id, project_id);
+	const changes: TaskChanges = {};
+	if (title !== undefined && title !== task.title) changes.title = { from: task.title, to: title };
+	if (description !== undefined && description !== task.description) changes.description = { from: task.description, to: description };
+	if (deadline !== undefined && deadline !== deadlineDay) changes.deadline = { from: deadlineDay, to: deadline };
+	const fields = Object.keys(changes) as (keyof TaskChanges)[];
+	if (fields.length === 0) return task;
+	const { rows } = await client.query<TaskRow>(
+		`UPDATE tasks SET ${fields.map((field, i) => `${field} = $${i + 1}`).join(', ')}
+		 WHERE id = $${fields.length + 1} AND project_id = $${fields.length + 2} RETURNING *`,
+		[...fields.map(field => changes[field]!.to), task_id, project_id]
 	);
+	await activityService.log(client, {
+		projectId: project_id, actorId, entityType: 'task', entityId: task_id, action: 'TASK_UPDATED',
+		metadata: { title: rows[0].title, changes },
+	});
+	return { ...task, ...rows[0] };
+});
 
-	if (result.rowCount === 0) {
-		throw new AppError('Task not found', 404);
-	}
+export const deleteTask = async (
+	task_id: number, project_id: number, actorId: number
+): Promise<StoredTask> => withProjectTransaction(project_id, actorId, ['editor'], async client => {
+	const { task } = await getTask(client, task_id, project_id);
+	await client.query('DELETE FROM tasks WHERE id = $1 AND project_id = $2', [task_id, project_id]);
+	await activityService.log(client, {
+		projectId: project_id, actorId, entityType: 'task', entityId: task_id, action: 'TASK_DELETED',
+		metadata: { title: task.title, status: task.status },
+	});
+	return task;
+});
 
-	return result.rows[0];
-}
-
-export const deleteTask = async (task_id: number, project_id: number): Promise<Task | undefined> => {
-	const result = await pool.query(
-		"DELETE FROM tasks WHERE id = $1 AND project_id = $2 RETURNING *",
-		[task_id, project_id]
+// Called by membership mutations with the project lock and transaction already held.
+export async function unassignMemberTasks(
+	client: PoolClient, projectId: number, member: PersonSnapshot, actorId: number, reason: AssignmentReason
+): Promise<void> {
+	const { rows } = await client.query<{ id: number; title: string }>(
+		'UPDATE tasks SET assigned_to = NULL WHERE project_id = $1 AND assigned_to = $2 RETURNING id, title',
+		[projectId, member.id]
 	);
-
-	if (result.rowCount === 0) {
-		throw new AppError('Task not found', 404);
+	for (const task of rows.sort((a, b) => a.id - b.id)) {
+		await activityService.log(client, {
+			projectId, actorId, entityType: 'task', entityId: task.id, action: 'TASK_ASSIGNED',
+			metadata: { title: task.title, from: member, to: null, reason },
+		});
 	}
-	return result.rows[0];
 }
 
 export const getAssignedTasks = async (user_id: number) => {

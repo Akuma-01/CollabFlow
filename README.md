@@ -46,8 +46,9 @@ DB_PORT=
 ## Tests and CI
 
 The backend uses Jest and Supertest against real PostgreSQL. Each run creates a
-fresh database from `backend/schema.sql`, covering authentication, role boundaries,
-cross-project isolation, and concurrent duplicate requests.
+fresh database from `backend/schema.sql` and the numbered migrations, covering
+authentication, role boundaries, cross-project isolation, transactional activity
+history, and concurrent mutations.
 
 ```sh
 docker compose -f compose.test.yml up -d --wait
@@ -74,7 +75,7 @@ frontend tests, lint, and build checks, on pushes and pull requests.
 - `GET /projects/:projectId` — get project details with task counts
 - `PATCH /projects/:projectId` — update project title
 - `DELETE /projects/:projectId` — delete project
-- `GET /projects/:projectId/activity` — paginated project creation/rename history
+- `GET /projects/:projectId/activity` — paginated project, task, membership, and role history
 
 ### Members
 - `GET /projects/:projectId/members` — list project members

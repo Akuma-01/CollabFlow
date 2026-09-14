@@ -69,7 +69,7 @@ export const assignTask = async (req: Request, res: Response, next: NextFunction
 	const { assigned_to } = req.body;
 
 	try {
-		const result = await tasksService.assignTask(task_id, project_id, assigned_to);
+		const result = await tasksService.assignTask(task_id, project_id, assigned_to, req.user.id);
 
 		res.status(200).json({
 			success: true,
@@ -97,7 +97,7 @@ export const updateTaskStatus = async (req: Request, res: Response, next: NextFu
 	try {
 		// project_id is now passed — the service scopes the UPDATE to this project
 		// so an editor of project A cannot mutate tasks in project B.
-		const result = await tasksService.updateTaskStatus(task_id, project_id, status as TaskStatus);
+		const result = await tasksService.updateTaskStatus(task_id, project_id, status as TaskStatus, req.user.id);
 
 		res.status(200).json({
 			success: true,
@@ -123,7 +123,7 @@ export const updateTask = async (req: Request, res: Response, next: NextFunction
 	const { title, description, deadline } = req.body;
 
 	try {
-		const updatedTask = await tasksService.updateTask(task_id, project_id, title, description, deadline);
+		const updatedTask = await tasksService.updateTask(task_id, project_id, req.user.id, title, description, deadline);
 
 		res.status(200).json({ success: true, data: updatedTask });
 	} catch (err) {
@@ -143,7 +143,7 @@ export const deleteTask = async (req: Request, res: Response, next: NextFunction
 	}
 
 	try {
-		await tasksService.deleteTask(task_id, project_id);
+		await tasksService.deleteTask(task_id, project_id, req.user.id);
 
 		res.status(200).json({ success: true, message: "Task successfully deleted" })
 	} catch (err) {

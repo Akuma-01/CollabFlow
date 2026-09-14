@@ -17,7 +17,8 @@ Every request passes through the following layers in order:
 3. **Role Middleware** — queries `project_members` and `projects` tables to verify 
    the user has sufficient role for that route (owner, editor, viewer, or guide)
 4. **Controller** — validates request inputs and calls the appropriate service
-5. **Service** — executes raw SQL queries against PostgreSQL via a connection pool
+5. **Service** — executes SQL via a connection pool; project mutations recheck
+   authorization after acquiring the project lock and write history atomically
 6. **Error Middleware** — catches any error from any layer and returns a consistent 
    JSON error response
 
@@ -92,14 +93,22 @@ of allowed roles and checks whether the requesting user is the project owner
 (via `projects.owner_id`) or holds a qualifying role in `project_members`. 
 Owners bypass the membership check entirely. This allows route-level 
 permission control with a single reusable middleware.
+Mutating services also check current permissions under a project row lock so a
+queued request cannot act on a role that changed after middleware ran.
 
 ## Key Design Decisions
 
-Project creation and renaming use a shared transaction helper to write the
-project change and activity record atomically. Renames lock the project row before
-reading the previous title. A read-only history endpoint uses project-scoped,
-indexed cursor pagination. See [the activity API](ACTIVITY.md) for event schemas
-and retention rules. Task/member events and the frontend feed are upcoming.
+Project, task, membership, and role changes write activity records in the same
+transaction as the mutation. Existing-project mutations lock the project row
+first, then check permissions and read the prior state. This serializes writes
+within a project while allowing different projects to change concurrently. It
+keeps before/after history accurate and prevents assignment races with member
+removal or role changes. Removing members or making them guides also clears and
+audits their project task assignments atomically.
+
+A read-only history endpoint uses project-scoped, indexed cursor pagination.
+See [the activity API](ACTIVITY.md) for event schemas, locking tradeoffs, and
+retention rules. The frontend feed is upcoming.
 
 **1. ON DELETE CASCADE for project-related data**
 When a project is deleted, all associated members and tasks are automatically 
@@ -107,9 +116,10 @@ removed. Keeping orphaned records would create data inconsistency and serve
 no product purpose in a collaboration tool.
 
 **2. Role-based authorization via reusable middleware**
-Rather than checking roles inside each controller, a single `hasRole` 
-middleware handles all authorization. This keeps controllers clean and makes 
-permission changes a one-line update in the route file.
+The `hasRole` middleware handles route authorization. Mutations use the shared
+`withProjectTransaction` helper for a second check under the project lock.
+Controllers pass the authenticated actor ID to services; future permission
+changes must update both route and transaction policies.
 
 **3. Owner stored in projects table, not project_members**
 Ownership is a property of the project itself. Storing it in `project_members` 

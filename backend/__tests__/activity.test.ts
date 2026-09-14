@@ -57,9 +57,9 @@ describe('Project activity', () => {
 		const member = await createUser('Member');
 		await addMember(owner, projectId, member, role);
 		const res = await request(app).get(`/projects/${projectId}/activity`).set('Cookie', member.cookies).expect(200);
-		expect(res.body.data).toHaveLength(1);
+		expect(res.body.data.map((event: { action: string }) => event.action)).toEqual(['MEMBER_ADDED', 'PROJECT_CREATED']);
 		await request(app).patch(`/projects/${projectId}`).set('Cookie', member.cookies).send({ title: 'Denied' }).expect(403);
-		expect((await history()).body.data).toHaveLength(1);
+		expect((await history()).body.data).toEqual(res.body.data);
 	});
 
 	it('denies unauthenticated users, outsiders, and removed members', async () => {

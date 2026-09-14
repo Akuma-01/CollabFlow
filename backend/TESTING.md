@@ -65,10 +65,17 @@ The frontend has 11 API-client tests. Jest reports the current backend total.
   for edits, moves, assignment and deletion; membership mutations; external
   assignees; removal of access to assigned tasks after membership removal.
 - Concurrency: simultaneous registration, member addition, and guide addition
-  assert both response outcomes and persisted uniqueness.
-- Activity: project creation/rename history, actor snapshots, no-op suppression,
-  project access, filtered cursor pagination, bigint precision, concurrent rename
-  transitions, rollback when logging fails, migration reapplication, and retention.
+  assert both response outcomes and persisted uniqueness; task status/field and
+  role changes verify continuous history and preservation of independent edits.
+- Activity: project, task, membership, and role history; actor/assignee/member
+  snapshots, changed-field metadata, no-op suppression, project access, filtered
+  cursor pagination, bigint precision, migration reapplication, and retention.
+- Atomicity: injected PostgreSQL log failures roll back each mutation, including
+  membership changes with several automatic unassignments and earlier log inserts.
+- Permission races: a test transaction holds a project row until PostgreSQL
+  confirms an HTTP mutation is waiting. Committing a role change/removal then
+  proves the service rechecks actor and assignee eligibility after middleware.
+  Another project can still be modified while the first project is blocked.
 
 Run one area while developing:
 
@@ -97,6 +104,6 @@ npm --prefix frontend run build
 ```
 
 Authentication rate limiting is disabled in the integration environment and is
-not covered by this suite. Task/membership activity, comments, and WebSockets need
+not covered by this suite. The activity frontend, comments, and WebSockets need
 tests when implemented. Apply the [database migrations](migrations/README.md)
 before starting this version on an existing database.
