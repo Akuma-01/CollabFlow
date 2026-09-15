@@ -10,6 +10,9 @@ import dashboardRoutes from './routes/dashboard.routes';
 import projectRoutes from './routes/projects.routes';
 import taskRoutes from './routes/tasks.routes';
 import userRoutes from './routes/users.routes';
+import { createServer } from 'node:http';
+import { startProjectRealtime } from './realtime/server';
+import pool from './config/db';
 
 const app = express();
 
@@ -39,7 +42,26 @@ app.use(errorMiddleware);
 export default app;
 
 if (require.main === module) {
-	app.listen(3000, "0.0.0.0", () => {
-		console.log("Server running on http://0.0.0.0:3000");
+	const server = createServer(app);
+	void startProjectRealtime(server).then(realtime => {
+		server.listen(3000, '0.0.0.0', () => console.log('Server running on http://0.0.0.0:3000'));
+		let closing = false;
+		const shutdown = async () => {
+			if (closing) return;
+			closing = true;
+			const deadline = setTimeout(() => process.exit(1), 10_000);
+			deadline.unref();
+			const drained = new Promise<void>(resolve => server.close(() => resolve()));
+			await realtime.close();
+			await drained;
+			await pool.end();
+			clearTimeout(deadline);
+		};
+		process.once('SIGTERM', () => { void shutdown(); });
+		process.once('SIGINT', () => { void shutdown(); });
+	}).catch(async () => {
+		console.error('Could not start the project notification listener');
+		await pool.end();
+		process.exitCode = 1;
 	});
 }

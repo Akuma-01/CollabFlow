@@ -8,8 +8,8 @@ contributions and review milestones. The backend is built with Node.js,
 Express, PostgreSQL, and JWT authentication using a layered architecture 
 that separates routing, business logic, and data access.
 
-## Request Lifecycle
-Every request passes through the following layers in order:
+## HTTP Request Lifecycle
+HTTP application requests pass through the following layers in order:
 
 1. **Router** — matches the URL to the correct route handler (auth, projects, tasks)
 2. **Auth Middleware** — validates the access JWT from its cookie or Bearer header,
@@ -111,6 +111,15 @@ See [the activity API](ACTIVITY.md) for event schemas, locking tradeoffs, and
 retention rules. The project's Activity view renders saved snapshots with filtered
 pagination. Each filter/refresh mounts a new feed, discarding prior pagination
 state and ignoring late responses; the shared API client handles session refresh.
+
+Project mutations also issue PostgreSQL notifications inside their transactions.
+Each API process holds a dedicated LISTEN connection and sends small refresh hints
+to authenticated WebSocket project rooms after commit. Before delivery, it batches
+session and membership checks for each room. Logout/replay revocation closes the
+affected session's sockets; heartbeat checks and token-expiry timers cover idle
+connections. Listener failure disconnects consumers and reconnects with backoff.
+The browser integration is the next checkpoint. See [the WebSocket protocol](REALTIME.md)
+for delivery guarantees, resource limits, and deployment requirements.
 
 **1. ON DELETE CASCADE for project-related data**
 When a project is deleted, all associated members and tasks are automatically 

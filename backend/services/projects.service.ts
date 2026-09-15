@@ -6,6 +6,7 @@ import * as activityService from './activity.service';
 import { PoolClient } from 'pg';
 import { withProjectTransaction } from '../utils/projectTransaction';
 import { unassignMemberTasks } from './tasks.service';
+import { notifyProject } from '../realtime/notifications';
 
 export const getProjectById = async (project_id: number): Promise<Project | undefined> => {
 	const result = await pool.query('SELECT * FROM projects WHERE id = $1', [project_id]);
@@ -93,6 +94,7 @@ export const createProject = async (title: string, owner_id: number): Promise<Pr
 export const deleteProject = async (project_id: number, actorId: number): Promise<Project> =>
 	withProjectTransaction(project_id, actorId, [], async client => {
 		const result = await client.query('DELETE FROM projects WHERE id = $1 RETURNING *', [project_id]);
+		await notifyProject(client, project_id);
 		return result.rows[0];
 	});
 

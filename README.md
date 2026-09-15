@@ -6,6 +6,7 @@ A full-stack academic project collaboration platform for college student teams a
 - Node.js + Express 5
 - TypeScript
 - PostgreSQL
+- WebSockets (`ws`) with PostgreSQL notifications
 - JWT Authentication + bcrypt
 - Zod validation
 - Rate limiting
@@ -18,6 +19,7 @@ collabflow/
     controllers/    # HTTP layer — request/response handling
     middlewares/    # Auth, role, validation, error handling
     routes/         # Route definitions
+    realtime/       # Authenticated project subscriptions and PostgreSQL listener
     schemas/        # Zod validation schemas
     services/       # Business logic and DB queries
     types/          # TypeScript interfaces and types
@@ -41,6 +43,7 @@ DB_HOST=
 DB_DATABASE=
 DB_PASSWORD=
 DB_PORT=
+FRONTEND_URL=http://localhost:3001
 ```
 
 ## Tests and CI
@@ -70,6 +73,12 @@ roles can read history. Filter by event type, load older events, or refresh for
 new changes. History survives task deletion and member removal; project deletion
 removes its history. See [the activity contract](backend/ACTIVITY.md) for the API,
 transaction guarantees, and retention rules.
+
+The backend also exposes authenticated WebSocket project subscriptions at
+`/projects/:projectId/events`. Committed mutations notify subscribers across API
+instances through PostgreSQL; session and membership checks guard delivery.
+Browser integration is the next checkpoint. See [the WebSocket contract](backend/REALTIME.md)
+for connection rules, failure recovery, and the limits of notification delivery.
 
 ## API Endpoints
 
@@ -138,8 +147,8 @@ transaction guarantees, and retention rules.
 
 ## Planned Improvements
 
-- **Real-time notifications** — WebSocket events for task assignments, status changes, and new
-  members so collaborators don't need to refresh manually
+- **Real-time browser updates** — connect the board and Activity view to the implemented
+  WebSocket transport, with reconnect handling and optimistic-state reconciliation
 - **Comment system** — faculty guides need a way to leave feedback on tasks or milestones beyond
   read-only access; a `task_comments` table with role-gated write access covers this
 - **College email verification** — domain-based access control (e.g. only `@university.edu`

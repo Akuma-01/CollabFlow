@@ -3,6 +3,7 @@ import pool from '../config/db';
 import { ActivityQuery } from '../schemas/activity.schema';
 import { AppError } from '../utils/AppError';
 import { ActivityEvent } from '../types/activity';
+import { notifyProject } from '../realtime/notifications';
 
 // Require the mutation's transaction client. Actor identity and metadata are
 // supplied by services; callers cannot create activity through the HTTP API.
@@ -13,6 +14,7 @@ export async function log(client: PoolClient, event: ActivityEvent): Promise<voi
 		[event.projectId, event.actorId, event.action, event.entityType, event.entityId, JSON.stringify(event.metadata)]
 	);
 	if (result.rowCount !== 1) throw new AppError('Activity actor no longer exists', 401);
+	await notifyProject(client, event.projectId);
 }
 
 export async function list(projectId: number, userId: number, query: ActivityQuery) {

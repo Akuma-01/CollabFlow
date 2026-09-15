@@ -3,6 +3,7 @@ import pool from '../config/db';
 import { User } from '../types';
 import { AppError } from '../utils/AppError';
 import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } from './token.service';
+import { SESSION_CHANNEL } from '../realtime/notifications';
 
 type SessionUser = Pick<User, 'id' | 'name' | 'email'>;
 export interface SessionTokens {
@@ -66,6 +67,7 @@ export async function rotateSession(token: string): Promise<SessionTokens> {
 
 		if (!timingSafeEqual(Buffer.from(session.refresh_token_hash, 'hex'), Buffer.from(hashToken(token), 'hex'))) {
 			await client.query('UPDATE auth_sessions SET revoked_at = clock_timestamp() WHERE id = $1', [payload.sid]);
+			await client.query('SELECT pg_notify($1, $2)', [SESSION_CHANNEL, payload.sid]);
 		} else {
 			tokens = issueTokens({ id: session.id, name: session.name, email: session.email }, payload.sid, session.expires_at);
 			await client.query('UPDATE auth_sessions SET refresh_token_hash = $1 WHERE id = $2',
@@ -100,7 +102,10 @@ export async function revokeSession(refreshToken?: string, accessToken?: string)
 	}
 	if (!payload) return;
 	await pool.query(
-		'UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, clock_timestamp()) WHERE id = $1 AND user_id = $2',
-		[payload.sid, payload.id]
+		`WITH revoked AS (
+			UPDATE auth_sessions SET revoked_at = clock_timestamp()
+			WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id
+		) SELECT pg_notify($3, id::text) FROM revoked`,
+		[payload.sid, payload.id, SESSION_CHANNEL]
 	);
 }

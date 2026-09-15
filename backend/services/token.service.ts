@@ -26,7 +26,7 @@ const refreshClaims = sessionClaims.extend({ type: z.literal('refresh'), jti: z.
 export const signAccessToken = (payload: AccessTokenPayload): string =>
 	jwt.sign({ ...payload, type: 'access' }, process.env.JWT_SECRET as string, { algorithm: 'HS256', expiresIn: '15m' });
 
-export const verifyAccessToken = (token: string): AccessTokenPayload => {
+export const verifyAccessToken = (token: string): z.infer<typeof accessClaims> => {
 	const payload = accessClaims.safeParse(verify(token, process.env.JWT_SECRET as string));
 	if (!payload.success) throw new AppError('Invalid or expired token', 401);
 	return payload.data;

@@ -77,12 +77,19 @@ current totals; see [frontend verification](../frontend/TESTING.md).
   confirms an HTTP mutation is waiting. Committing a role change/removal then
   proves the service rechecks actor and assignee eligibility after middleware.
   Another project can still be modified while the first project is blocked.
+- WebSockets: real clients verify cookie/Bearer authentication, Origin checks,
+  every role, project isolation, mutation notifications, no-op/rejection/rollback
+  silence, transaction coalescing, removal/deletion, logout/replay, token expiry,
+  heartbeat cleanup, message/connection limits, and delivery across two servers.
+  A recovery test terminates only the disposable database's notification listener
+  and checks that clients disconnect and a new subscription works after recovery.
 
 Run one area while developing:
 
 ```sh
 npm --prefix backend test -- --runInBand isolation
 npm --prefix backend test -- --runInBand activity
+npm --prefix backend test -- --runInBand realtime
 npm --prefix backend run test:watch -- auth
 ```
 
@@ -106,6 +113,7 @@ npm --prefix frontend run build
 ```
 
 Authentication rate limiting is disabled in the integration environment and is
-not covered by this suite. Comments and WebSockets need tests when implemented.
+not covered by this suite. WebSocket browser integration and comments need tests
+when implemented. The transport's contract and limits are in [REALTIME.md](REALTIME.md).
 Apply the [database migrations](migrations/README.md)
 before starting this version on an existing database.
