@@ -11,6 +11,7 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only server.ts",
     "test": "jest",
+    "test:startup": "npm run build && node test/startup-smoke.cjs",
     "test:watch": "jest --watch"
   },
   "keywords": [],

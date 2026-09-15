@@ -7,6 +7,7 @@ docker compose -f compose.test.yml up -d --wait
 npm --prefix backend ci
 npm --prefix backend test -- --runInBand
 npm --prefix backend run build
+npm --prefix backend run test:startup
 ```
 
 Stop the disposable database server when finished:
@@ -47,10 +48,15 @@ is a separate set of focused middleware unit tests with a mocked service.
 
 ## Coverage
 
-The backend includes PostgreSQL integration tests and 6 middleware unit tests.
+The backend includes PostgreSQL integration tests plus middleware and configuration unit tests.
 The frontend has API-client, synchronization, and Chromium tests, including a
 two-browser workflow against the real API and PostgreSQL. Test runners report the
 current totals; see [frontend verification](../frontend/TESTING.md).
+
+- Runtime: environment/port/origin/proxy/TLS validation, source/compiled `.env`
+  loading, readiness, missing migrations, occupied-port cleanup, real listener
+  recovery, idle pool connection loss, and shutdown with an active HTTP response
+  and authenticated WebSocket. Readiness errors do not expose database details.
 
 - Authentication: password hashing, duplicate and concurrent registration,
   validation, cookie flags and token lifetimes, cookies/Bearer access,
@@ -100,6 +106,13 @@ npm --prefix backend run test:watch -- auth
 service and builds the backend on pushes and pull requests. A second job lints,
 runs API-client tests, and builds the frontend for its Chromium browser suite.
 No application or deployment secrets are needed.
+
+`npm run test:startup` also builds and runs the compiled entry point in production
+mode with generated secrets and its own disposable database. It verifies the
+configured port, readiness, production cookie flags, WebSocket authentication,
+SIGTERM cleanup, and startup rejection for invalid configuration. Its native HTTP
+client checks cookie attributes; actual HTTPS/browser deployment checks are
+described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 The frontend API-client tests exercise the actual client with controlled fetch
 responses and a shared-lock simulation: concurrent requests, independent tabs,

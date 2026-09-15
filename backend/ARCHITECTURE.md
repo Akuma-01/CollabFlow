@@ -9,6 +9,14 @@ Express, PostgreSQL, and JWT authentication using a layered architecture
 that separates routing, business logic, and data access.
 
 ## HTTP Request Lifecycle
+
+Startup validates runtime configuration, verifies the required database schema,
+and subscribes the notification listener before opening the HTTP port.
+`/health/live` checks the process; `/health/ready` checks PostgreSQL and listener
+availability, and becomes unavailable during shutdown. The server drains active
+HTTP requests while closing WebSockets and the listener. URL database connections
+verify TLS certificates by default. See [deployment and operation](DEPLOYMENT.md).
+
 HTTP application requests pass through the following layers in order:
 
 1. **Router** — matches the URL to the correct route handler (auth, projects, tasks)

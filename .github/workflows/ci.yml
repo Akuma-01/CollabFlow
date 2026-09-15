@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm test -- --ci --runInBand
-      - run: npm run build
+      - run: npm run test:startup
 
   frontend:
     runs-on: ubuntu-latest

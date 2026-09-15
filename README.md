@@ -3,6 +3,7 @@
 A full-stack academic project collaboration platform for college student teams and faculty mentors. Students can create project workspaces, divide tasks among team members, and track progress. Faculty guides can monitor contributions and review milestones.
 
 ## Tech Stack
+- Next.js + React
 - Node.js + Express 5
 - TypeScript
 - PostgreSQL
@@ -10,6 +11,21 @@ A full-stack academic project collaboration platform for college student teams a
 - JWT Authentication + bcrypt
 - Zod validation
 - Rate limiting
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Next.js browser] -->|Authenticated REST requests| API[Express API]
+    API -->|Mutation + activity + NOTIFY in one transaction| DB[(PostgreSQL)]
+    DB -->|LISTEN: committed changes| Rooms[Authenticated project rooms]
+    Rooms -->|WebSocket refresh hints| Browser
+```
+
+Each API process owns its project rooms and a dedicated PostgreSQL listener.
+The browser refetches authorized state after hints and reconnects, coordinating
+those reads with optimistic task writes. See [architecture details](backend/ARCHITECTURE.md)
+for transaction boundaries, session rotation, and authorization decisions.
 
 ## Project Structure
 ```
@@ -38,6 +54,9 @@ collabflow/
    backend's `FRONTEND_URL`. Set `NEXT_PUBLIC_API_URL` before building; both HTTP
    requests and WebSockets use it.
 
+For production configuration, database TLS, health checks, and shutdown behavior,
+see [deployment and operation](backend/DEPLOYMENT.md).
+
 ## Environment Variables
 ```
 JWT_SECRET=
@@ -48,6 +67,8 @@ DB_DATABASE=
 DB_PASSWORD=
 DB_PORT=
 FRONTEND_URL=http://localhost:3001
+PORT=3000
+TRUST_PROXY_HOPS=0
 ```
 
 ## Tests and CI
@@ -61,6 +82,7 @@ history, and concurrent mutations.
 docker compose -f compose.test.yml up -d --wait
 npm --prefix backend ci
 npm --prefix backend test -- --runInBand
+npm --prefix backend run test:startup
 ```
 
 See [backend/TESTING.md](backend/TESTING.md) for isolation safeguards, focused test
@@ -92,6 +114,10 @@ for connection rules, failure recovery, and the limits of notification delivery.
 
 ## API Endpoints
 
+### Health
+- `GET /health/live` — process liveness without a database query
+- `GET /health/ready` — PostgreSQL and notification listener readiness; 503 during recovery or shutdown
+
 ### Auth
 - `POST /auth/register` — register a new user
 - `POST /auth/login` — login and receive JWT token
@@ -109,7 +135,7 @@ for connection rules, failure recovery, and the limits of notification delivery.
 
 ### Members
 - `GET /projects/:projectId/members` — list project members
-- `POST /projects/:projectId/members` — add a member (editor or viewer)
+- `POST /projects/:projectId/members` — add an editor, viewer, or guide
 - `PATCH /projects/:projectId/members/:userId` — update member role
 - `DELETE /projects/:projectId/members/:userId` — remove a member
 - `POST /projects/:projectId/guides` — assign a faculty guide
@@ -127,7 +153,7 @@ for connection rules, failure recovery, and the limits of notification delivery.
 - `GET /dashboard/tasks` — all tasks assigned to logged in user ordered by deadline
 
 ### Users
-- `GET /users` — list all users (used for member search)
+- `GET /users/search?q=...` — search users for project membership
 
 ## Roles
 | Role | Description |

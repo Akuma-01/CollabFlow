@@ -142,10 +142,12 @@ after requesting older history, the feed preserves those pages and offers
 ### Server and verification
 
 `npm run dev` and `npm start` start HTTP and WebSockets on the existing API port
-3000. A reverse proxy must forward HTTP Upgrade/Connection headers and allow
+given by `PORT` (default 3000). A reverse proxy must forward HTTP Upgrade/Connection headers and allow
 long-lived connections; use HTTPS/WSS in deployment. Set `FRONTEND_URL` to the
 actual browser origin. SIGTERM/SIGINT stop upgrades, disconnect peers, close the
 listener, drain HTTP requests, and end the query pool (ten-second shutdown limit).
+`/health/ready` includes listener readiness, returning 503 during notification
+recovery. See [deployment configuration](DEPLOYMENT.md) for TLS and proxy setup.
 
 ```sh
 npm --prefix backend test -- --runInBand realtime

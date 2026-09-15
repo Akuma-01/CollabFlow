@@ -72,7 +72,8 @@ movement, assignment, remote history/title changes, role downgrade, membership
 removal, and logout revocation, while preserving unfinished input.
 
 The API harness reuses the backend's disposable-database setup and numbered
-migrations. Only `TEST_DB_*` settings select the PostgreSQL test server; normal
+migrations, starts the same runtime used by the deployed entry point, and waits
+for `/health/ready`. Only `TEST_DB_*` settings select the PostgreSQL test server; normal
 application credentials are ignored. The runner gracefully shuts down both
 servers and drops its generated database even after an assertion failure. A hard
 kill can leave a test database behind; stopping/removing the disposable Docker

@@ -8,7 +8,7 @@ export default defineConfig({
 	webServer: [
 		{
 			command: 'npm --prefix ../backend run build && node e2e-live/server.mjs',
-			url: 'http://127.0.0.1:4319',
+			url: 'http://127.0.0.1:4319/health/ready',
 			stdout: 'pipe',
 			reuseExistingServer: false,
 			timeout: 60_000,

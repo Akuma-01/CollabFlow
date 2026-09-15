@@ -1,7 +1,8 @@
+import { runtimeConfig } from '../config/runtime';
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../utils/AppError';
 
-const frontendOrigin = new URL(process.env.FRONTEND_URL || 'http://localhost:3001').origin;
+const frontendOrigin = runtimeConfig.frontendOrigin;
 
 // CORS alone does not stop cross-origin form POSTs. Protect cookie-changing
 // auth endpoints, including refresh/logout, when cookies use SameSite=None.

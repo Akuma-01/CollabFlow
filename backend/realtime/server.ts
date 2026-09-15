@@ -6,6 +6,7 @@ import pool from '../config/db';
 import { verifyAccessToken } from '../services/token.service';
 import { AppError } from '../utils/AppError';
 import { NotificationListener } from './listener';
+import { runtimeConfig } from '../config/runtime';
 
 interface Identity { id: number; sid: string; exp: number }
 interface Peer extends Identity { ws: WebSocket; projectId: number; alive: boolean; ready: boolean }
@@ -24,7 +25,7 @@ export async function startProjectRealtime(server: Server, options: Options = {}
 	const peers = new Set<Peer>();
 	const handshakes = new Set<Duplex>();
 	const dirty = new Set<number>();
-	const origin = new URL(process.env.FRONTEND_URL || 'http://localhost:3001').origin;
+	const origin = runtimeConfig.frontendOrigin;
 	let stopped = false;
 	let flushing = false;
 	let heartbeatRunning = false;
@@ -161,6 +162,7 @@ export async function startProjectRealtime(server: Server, options: Options = {}
 	heartbeat.unref();
 
 	return {
+		isReady: () => !stopped && listener.ready,
 		async close(): Promise<void> {
 			stopped = true;
 			server.off('upgrade', upgrade);
