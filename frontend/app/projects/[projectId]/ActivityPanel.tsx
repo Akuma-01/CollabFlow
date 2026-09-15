@@ -59,26 +59,34 @@ function failure(error: unknown) {
 	};
 }
 
-function ActivityFeed({ projectId, action, onRefresh }: { projectId: string; action: ActivityAction | ''; onRefresh: () => void }) {
+function ActivityFeed({ projectId, action, revision, onRefresh }: { projectId: string; action: ActivityAction | ''; revision: number; onRefresh: () => void }) {
 	const [page, setPage] = useState<ActivityPage>({ data: [], nextCursor: null });
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<ReturnType<typeof failure> | null>(null);
 	const active = useRef(false);
 	const inFlight = useRef(false);
+	const [paged, setPaged] = useState(false);
+	const [loadedRevision, setLoadedRevision] = useState(revision);
 
 	useEffect(() => {
 		let cancelled = false;
 		active.current = true;
-		api.get<ActivityPage>(activityPath(projectId, action))
-			.then(result => { if (!cancelled) setPage(result); })
-			.catch(err => { if (!cancelled) setError(failure(err)); })
+		if (!paged) api.get<ActivityPage>(activityPath(projectId, action))
+			.then(result => { if (!cancelled) { setPage(result); setLoadedRevision(revision); setError(null); } })
+			.catch(err => {
+				if (cancelled) return;
+				const problem = failure(err);
+				if ([401, 403, 404].includes(problem.status)) setPage({ data: [], nextCursor: null });
+				setError(problem);
+			})
 			.finally(() => { if (!cancelled) setLoading(false); });
 		return () => { cancelled = true; active.current = false; };
-	}, [projectId, action]);
+	}, [projectId, action, revision, paged]);
 
 	const loadMore = async () => {
 		if (!page.nextCursor || inFlight.current || loading) return;
 		inFlight.current = true;
+		setPaged(true);
 		setLoading(true);
 		setError(null);
 		try {
@@ -101,12 +109,17 @@ function ActivityFeed({ projectId, action, onRefresh }: { projectId: string; act
 
 	return (
 		<div>
+			{revision !== loadedRevision && paged && (
+				<div className="border-b border-blue-100 bg-blue-50 px-5 py-3 text-sm text-blue-700">
+					Project changes available. <button type="button" onClick={onRefresh} className="font-medium underline">Show latest activity</button>
+				</div>
+			)}
 			{error && (
 				<div role="alert" className="mx-4 my-4 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-700 sm:mx-5">
 					<p>{error.message}</p>
 					{error.status === 401 ? <Link href="/login" className="mt-2 inline-block font-medium underline">Sign in</Link>
 						: [403, 404].includes(error.status) ? <Link href="/dashboard" className="mt-2 inline-block font-medium underline">Back to Dashboard</Link>
-							: <button type="button" onClick={page.data.length ? loadMore : onRefresh} className="mt-2 font-medium underline">Try again</button>}
+							: <button type="button" onClick={paged && page.data.length ? loadMore : onRefresh} className="mt-2 font-medium underline">Try again</button>}
 				</div>
 			)}
 			{page.data.length > 0 && <ol aria-label="Project activity" className="divide-y divide-gray-100">{page.data.map(event => <ActivityItem key={event.id} event={event} />)}</ol>}
@@ -152,7 +165,7 @@ export default function ActivityPanel({ projectId, revision }: { projectId: stri
 			</div>
 			{/* A new query gets an empty feed immediately. Cleanup prevents an older
 			    response from replacing a new filter, refreshed page, or project. */}
-			<ActivityFeed key={`${projectId}:${action}:${refresh}:${revision}`} projectId={projectId} action={action} onRefresh={reload} />
+			<ActivityFeed key={`${projectId}:${action}:${refresh}`} projectId={projectId} action={action} revision={revision} onRefresh={reload} />
 		</section>
 	);
 }

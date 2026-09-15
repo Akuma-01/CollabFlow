@@ -1,9 +1,8 @@
 # Project WebSocket protocol
 
-This checkpoint adds the server transport and PostgreSQL integration tests.
-Connecting the browser board and Activity view is the next checkpoint; they still
-use their existing HTTP/manual-refresh behavior for now. No new migration is
-required beyond the session and activity migrations.
+The server transport connects the browser board and Activity view to committed
+project changes. No new migration is required beyond the session and activity
+migrations.
 
 ## Connecting
 
@@ -110,6 +109,38 @@ benchmark or a substitute for deployment-level connection/rate limits.
 
 ## Running and testing
 
+### Browser synchronization
+
+The project page opens one native WebSocket, using the configured
+`NEXT_PUBLIC_API_URL` with HTTP/HTTPS mapped to WS/WSS. Cookies authenticate it;
+the browser sets Origin. Initial and reconnect reads use the shared HTTP client,
+including its coordinated session refresh. Browser upgrade failures expose no HTTP
+status, so recovery reads also detect expired sessions and removed projects.
+
+Hints are batched over 75 ms. Only one project snapshot read runs at once, with
+a 15-second deadline. A newer hint or local write invalidates an older read.
+Pending local writes hold snapshot application; after all settle, a fresh read
+reconciles tasks, members, and project details. Task movement remains optimistic;
+failure rolls it back, displays an error, and still reconciles. Assignment and
+movement cannot overlap for the same task. Other tasks can be edited independently.
+This provides eventual convergence, not offline writes or conflict-free editing;
+the server's transaction order determines the result of concurrent writes.
+
+The client refetches after every `project.ready`, retries failures with jittered
+exponential backoff capped at 30 seconds, and retries sockets that do not become
+ready within ten seconds. Returning to a visible tab or coming online triggers a
+refresh. The connection indicator offers **Retry now** during recovery. Access
+loss clears the project and history; expired sessions offer **Sign in**. Unmounting
+closes sockets, timers, and outstanding snapshot reads. Cancelling a read does not
+cancel another request's shared cookie rotation.
+
+Forms stay mounted across remote updates and Board/Activity switches. A role
+downgrade hides editing controls. The newest Activity page refreshes automatically;
+after requesting older history, the feed preserves those pages and offers
+**Show latest activity** while retaining the selected filter.
+
+### Server and verification
+
 `npm run dev` and `npm start` start HTTP and WebSockets on the existing API port
 3000. A reverse proxy must forward HTTP Upgrade/Connection headers and allow
 long-lived connections; use HTTPS/WSS in deployment. Set `FRONTEND_URL` to the
@@ -119,6 +150,8 @@ listener, drain HTTP requests, and end the query pool (ten-second shutdown limit
 ```sh
 npm --prefix backend test -- --runInBand realtime
 npm --prefix backend run build
+npm --prefix frontend run test:e2e
+npm --prefix frontend run test:e2e:live
 ```
 
 The suite uses real HTTP servers, `ws` clients, and the disposable PostgreSQL
@@ -129,5 +162,8 @@ servers, and notification-listener recovery. See [test setup](TESTING.md).
 
 Direct SQL changes do not generate project hints automatically. New API mutations
 must participate in the activity/notification transaction protocol. Browser
-subscription, reconnect UX, optimistic reconciliation, and comment events remain
+tests cover reconnect/session recovery, pending-write races, access loss, and
+Activity pagination. The live browser suite creates an isolated database on the
+test PostgreSQL server and exercises two real browser sessions through HTTP and
+WebSockets; see [frontend test setup](../frontend/TESTING.md). Comment events remain
 future work; comments are not implemented in the application yet.

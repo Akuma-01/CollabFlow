@@ -48,7 +48,8 @@ is a separate set of focused middleware unit tests with a mocked service.
 ## Coverage
 
 The backend includes PostgreSQL integration tests and 6 middleware unit tests.
-The frontend has API-client and Chromium Activity tests. Test runners report the
+The frontend has API-client, synchronization, and Chromium tests, including a
+two-browser workflow against the real API and PostgreSQL. Test runners report the
 current totals; see [frontend verification](../frontend/TESTING.md).
 
 - Authentication: password hashing, duplicate and concurrent registration,

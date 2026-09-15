@@ -1,7 +1,9 @@
 "use client"
 
 import { api, ApiError } from "@/lib/api";
-import { Member, Project, Task, TaskStatus } from "@/lib/types";
+import { Member, Task, TaskStatus } from "@/lib/types";
+import { BeginMutation } from '@/lib/project-sync';
+import { useProjectSync } from '@/lib/use-project-sync';
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -44,12 +46,12 @@ function MemberPanel({
 	members,
 	isOwner,
 	projectId,
-	onMembersChanged,
+	beginMutation,
 }: {
 	members: Member[];
 	isOwner: boolean;
 	projectId: string;
-	onMembersChanged: () => Promise<void>;
+	beginMutation: BeginMutation;
 }) {
 	const [showForm, setShowForm] = useState(false);
 	const [role, setRole] = useState<"editor" | "viewer" | "guide" | "">("");
@@ -82,6 +84,8 @@ function MemberPanel({
 	const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!selected || !role) return;
+		const finish = beginMutation('members');
+		if (!finish) return;
 
 		setSubmitting(true);
 		setError(null);
@@ -89,7 +93,6 @@ function MemberPanel({
 		try {
 			await api.post(`/projects/${projectId}/members`, { user_id: selected.id, role });
 
-			await onMembersChanged();
 			setRole("");
 			setSearch("");
 			setResults([]);
@@ -100,6 +103,7 @@ function MemberPanel({
 		} catch (err) {
 			setError(err instanceof ApiError ? err.message : "Failed to add member");
 		} finally {
+			finish();
 			setSubmitting(false);
 		}
 	}
@@ -214,18 +218,26 @@ function TaskCard({
 	canEdit,
 	projectId,
 	onUpdate,
+	beginMutation,
+	pending,
 }: {
 	task: Task;
 	members: Member[];
 	canEdit: boolean;
 	projectId: string;
 	onUpdate: (t: Task) => void;
+	beginMutation: BeginMutation;
+	pending: boolean;
 }) {
 	const [editingAssignee, setEditingAssignee] = useState(false);
 	const [assignError, setAssignError] = useState<string | null>(null);
 	const overdue = isOverdue(task.deadline, task.status);
 
 	const handleAssign = async (userId: number | null) => {
+		if (!canEdit) return;
+		const finish = beginMutation(`task:${task.id}`);
+		if (!finish) return;
+		setAssignError(null);
 		try {
 			const res = await api.patch<{ data: Task }>(
 				`/projects/${projectId}/tasks/${task.id}/assign`,
@@ -242,6 +254,7 @@ function TaskCard({
 		} catch (err) {
 			setAssignError(err instanceof ApiError ? err.message : "Failed to assign");
 		} finally {
+			finish();
 			setEditingAssignee(false);
 		}
 	};
@@ -258,6 +271,8 @@ function TaskCard({
 			{editingAssignee && canEdit ? (
 				<select
 					autoFocus
+					aria-label={`Assign ${task.title}`}
+					disabled={pending}
 					value={task.assigned_to ?? ""}
 					onChange={async (e) => {
 						const v = e.target.value;
@@ -276,6 +291,7 @@ function TaskCard({
 			) : (
 				<button
 					type="button"
+					disabled={!canEdit || pending}
 					onClick={() => canEdit && setEditingAssignee(true)}
 					className={`flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 transition w-full text-left truncate ${task.assigned_to
 						? "bg-blue-50 text-blue-700 hover:bg-blue-100"
@@ -288,6 +304,7 @@ function TaskCard({
 			)}
 
 			{/* Assign error */}
+			{pending && <p className="text-xs text-gray-500">Saving…</p>}
 			{assignError && (
 				<p className="text-[11px] text-red-500 mt-1">{assignError}</p>
 			)}
@@ -312,6 +329,8 @@ function KanbanBoard({
 	canCreate,
 	projectId,
 	onTasksChanged,
+	beginMutation,
+	pending,
 }: {
 	tasks: Task[];
 	members: Member[];
@@ -319,6 +338,8 @@ function KanbanBoard({
 	canCreate: boolean;
 	projectId: string;
 	onTasksChanged: (updater: (prev: Task[]) => Task[]) => void;
+	beginMutation: BeginMutation;
+	pending: ReadonlySet<string>;
 }) {
 	const [dragged, setDragged] = useState<Task | null>(null);
 	const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
@@ -329,6 +350,7 @@ function KanbanBoard({
 	const [deadline, setDeadline] = useState("");
 	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
+	const [moveError, setMoveError] = useState<string | null>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => { if (showForm) titleRef.current?.focus(); }, [showForm]);
@@ -345,9 +367,13 @@ function KanbanBoard({
 		});
 
 	const handleDrop = async (newStatus: TaskStatus) => {
-		if (!dragged || dragged.status === newStatus) { setDragged(null); setDragOver(null); return; }
-		const prev = dragged;
-		upsert({ ...dragged, status: newStatus }); // optimistic
+		// Read the current card: another member may have changed it during a drag.
+		const prev = tasks.find(task => task.id === dragged?.id);
+		if (!canEdit || !prev || prev.status === newStatus) { setDragged(null); setDragOver(null); return; }
+		const finish = beginMutation(`task:${prev.id}`);
+		if (!finish) { setDragged(null); setDragOver(null); return; }
+		setMoveError(null);
+		upsert({ ...prev, status: newStatus }); // optimistic
 		setDragged(null); setDragOver(null);
 		try {
 			const res = await api.patch<{ data: Task }>(
@@ -355,13 +381,19 @@ function KanbanBoard({
 				{ status: newStatus }
 			);
 			upsert({ ...prev, ...res.data });
-		} catch {
+		} catch (err) {
 			upsert(prev); // rollback
+			setMoveError(err instanceof ApiError ? err.message : 'Could not move task. Please try again.');
+		} finally {
+			finish();
 		}
 	};
 
 	const handleCreate = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (!canCreate) return;
+		const finish = beginMutation('create-task');
+		if (!finish) return;
 		setCreateError(null);
 		setCreating(true);
 		try {
@@ -385,6 +417,7 @@ function KanbanBoard({
 		} catch (err) {
 			setCreateError(err instanceof ApiError ? err.message : "Failed to create task");
 		} finally {
+			finish();
 			setCreating(false);
 		}
 	};
@@ -405,7 +438,7 @@ function KanbanBoard({
 			</div>
 
 			{/* Create task form */}
-			{showForm && (
+			{showForm && canCreate && (
 				<div className="bg-white rounded-xl border border-blue-200 shadow-sm p-5">
 					<h3 className="text-sm font-semibold text-gray-800 mb-4">New task</h3>
 					{createError && <p className="text-xs text-red-600 mb-3">{createError}</p>}
@@ -465,6 +498,7 @@ function KanbanBoard({
 			)}
 
 			{/* Columns */}
+			{moveError && <p role="alert" className="text-sm text-red-600">{moveError}</p>}
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 				{STATUS_ORDER.map((statusKey) => {
 					const meta = STATUS_COL[statusKey];
@@ -473,6 +507,8 @@ function KanbanBoard({
 					return (
 						<div
 							key={statusKey}
+							role="region"
+							aria-label={`${meta.label} tasks`}
 							className={`rounded-xl p-3 min-h-[220px] transition-colors ${meta.bg} ${isTargeted ? "ring-2 ring-blue-400 ring-inset" : ""}`}
 							onDragOver={(e) => { e.preventDefault(); setDragOver(statusKey); }}
 							onDragLeave={() => setDragOver(null)}
@@ -493,7 +529,7 @@ function KanbanBoard({
 									col.map((task) => (
 										<div
 											key={task.id}
-											draggable={canEdit}
+											draggable={canEdit && !pending.has(`task:${task.id}`)}
 											onDragStart={() => setDragged(task)}
 											onDragEnd={() => { if (dragged) setDragged(null); }}
 										>
@@ -503,6 +539,8 @@ function KanbanBoard({
 												canEdit={canEdit}
 												projectId={projectId}
 												onUpdate={upsert}
+												beginMutation={beginMutation}
+												pending={pending.has(`task:${task.id}`)}
 											/>
 										</div>
 									))
@@ -521,53 +559,10 @@ function KanbanBoard({
 export default function ProjectClient({ projectId }: { projectId: string }) {
 	const router = useRouter();
 
-	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [project, setProject] = useState<Project | null>(null);
-	const [tasks, setTasks] = useState<Task[]>([]);
-	const [members, setMembers] = useState<Member[]>([]);
-	const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+	const { project, tasks, setTasks, members, currentUserId, denied, status, pending,
+		beginMutation, refresh, revision: activityRevision } = useProjectSync(projectId);
 	const [view, setView] = useState<'board' | 'activity'>('board');
-	const [activityRevision, setActivityRevision] = useState(0);
-
-	useEffect(() => {
-		const load = async () => {
-			try {
-				const [meRes, projectRes, membersRes, tasksRes] = await Promise.all([
-					api.get<{ data: { id: number; name: string; email: string } }>("/auth/me"),
-					api.get<{ data: Project }>(`/projects/${projectId}`),
-					api.get<{ data: Member[] }>(`/projects/${projectId}/members`),
-					api.get<{ data: Task[] }>(`/projects/${projectId}/tasks`),
-				]);
-				setCurrentUserId(meRes.data.id);
-				setProject(projectRes.data);
-				setMembers(membersRes.data);
-				setTasks(tasksRes.data);
-			} catch (err) {
-				if (err instanceof ApiError && err.status === 401) {
-					router.replace("/login");
-				} else {
-					setError(err instanceof Error ? err.message : "Failed to load project");
-				}
-			} finally {
-				setLoading(false);
-			}
-		};
-		load();
-	}, [projectId, router]);
-
-	// Fixed: refetchMembers now has error handling so a network blip doesn't
-	// cause an unhandled promise rejection that crashes the member panel.
-	const refetchMembers = async () => {
-		setActivityRevision(value => value + 1);
-		try {
-			const res = await api.get<{ data: Member[] }>(`/projects/${projectId}/members`);
-			setMembers(res.data);
-		} catch (err) {
-			// Non-fatal — member panel will show stale data; user can refresh.
-			console.error("Failed to refresh members:", err);
-		}
-	};
 
 	const handleDeleteProject = async () => {
 		if (!window.confirm("Permanently delete this project and all its tasks?")) return;
@@ -579,22 +574,24 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 		}
 	};
 
-	if (loading) {
+	if (!project && !denied && !error) {
 		return (
 			<div className="flex items-center justify-center min-h-[60vh]">
 				<div className="text-center space-y-3">
 					<div className="mx-auto w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-					<p className="text-sm text-gray-500">Loading project…</p>
+					<p className="text-sm text-gray-500">{status === 'reconnecting' ? 'Could not load project. Retrying…' : 'Loading project…'}</p>
+					{status === 'reconnecting' && <button type="button" onClick={refresh} className="text-sm text-blue-600">Retry now</button>}
 				</div>
 			</div>
 		);
 	}
 
-	if (error || !project) {
+	if (error || denied || !project) {
 		return (
 			<div className="flex items-center justify-center min-h-[60vh]">
 				<div className="text-center space-y-3">
-					<p className="text-gray-700 font-medium">{error ?? "Project not found"}</p>
+					<p role="alert" className="text-gray-700 font-medium">{denied === 401 ? 'Your session has expired. Sign in to continue.' : denied ? 'This project is no longer available to you.' : error ?? 'Project not found'}</p>
+					{denied === 401 && <Link href="/login" className="block text-sm text-blue-600 hover:underline">Sign in</Link>}
 					<Link href="/dashboard" className="text-sm text-blue-600 hover:underline">
 						← Back to Dashboard
 					</Link>
@@ -624,6 +621,10 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 				<span>←</span>
 				<span>Dashboard</span>
 			</Link>
+			<div className="flex items-center gap-3 text-xs text-gray-500">
+				<span role="status" aria-label="Project synchronization">{status === 'live' ? 'Live updates connected' : status === 'connecting' ? 'Connecting to live updates…' : 'Reconnecting… Updates may be delayed.'}</span>
+				{status === 'reconnecting' && <button type="button" onClick={refresh} className="font-medium text-blue-600 hover:underline">Retry now</button>}
+			</div>
 
 			{/* Project header */}
 			<div className="bg-white rounded-xl border border-gray-200 shadow-sm px-6 py-5">
@@ -682,7 +683,7 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 					members={members}
 					isOwner={isOwner}
 					projectId={projectId}
-					onMembersChanged={refetchMembers}
+					beginMutation={beginMutation}
 				/>
 				<div className="min-w-0 space-y-4">
 					<nav aria-label="Project views" className="flex gap-1 border-b border-gray-200 pb-2">
@@ -701,6 +702,8 @@ export default function ProjectClient({ projectId }: { projectId: string }) {
 							canCreate={canCreate}
 							projectId={projectId}
 							onTasksChanged={setTasks}
+							beginMutation={beginMutation}
+							pending={pending}
 						/>
 					</div>
 					{view === 'activity' && <ActivityPanel projectId={projectId} revision={activityRevision} />}

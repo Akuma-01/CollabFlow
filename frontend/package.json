@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "tsx --test test/*.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "test:e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {

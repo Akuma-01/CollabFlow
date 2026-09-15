@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { ActivityRecord } from '../lib/activity';
-import { ProjectRole } from '../lib/types';
+import { Task, ProjectRole } from '../lib/types';
 
 const event = (action = 'PROJECT_CREATED', metadata: Record<string, unknown> = { title: 'Demo' }, id = '1'): ActivityRecord => ({
 	id, project_id: 7, actor_id: null, actor_name: 'Alice', action,
@@ -21,6 +21,10 @@ async function project(page: Page, role: ProjectRole = 'owner') {
 	page.on('pageerror', error => errors.push(error.message));
 	const member = { id: 3, name: 'Alice', email: 'alice@test.com', role };
 	const members = [member];
+	const tasks: Task[] = [];
+	await page.routeWebSocket('ws://127.0.0.1:4319/projects/7/events', socket => {
+		socket.send(JSON.stringify({ type: 'project.ready', projectId: 7 }));
+	});
 	const state = {
 		activity: (async () => reply([event()])) as (url: URL) => Promise<Reply>,
 		requests: [] as URL[],
@@ -49,13 +53,15 @@ async function project(page: Page, role: ProjectRole = 'owner') {
 			if (route.request().method() === 'POST') {
 				state.created = true;
 				data = { ...route.request().postDataJSON(), id: 8, project_id: 7, status: 'todo', assigned_to: null };
-			} else data = [];
+				tasks.push(data as Task);
+			} else data = tasks;
 		} else if (path === '/users/search') data = [{ id: 4, name: 'Bob', email: 'bob@test.com' }];
 		else throw new Error(`Unexpected API request: ${route.request().method()} ${path}`);
 		await route.fulfill({ json: { success: true, data } });
 	});
 	await page.goto('/projects/7');
 	await expect(page.getByRole('heading', { name: 'Demo' })).toBeVisible();
+	await expect(page.getByRole('status', { name: 'Project synchronization' })).toHaveText('Live updates connected');
 	return { state, errors };
 }
 const openActivity = (page: Page) => page.getByRole('button', { name: 'Activity', exact: true }).click();
@@ -146,9 +152,9 @@ test('recovers from initial failure and distinguishes empty history from empty f
 	await expect(alert(page)).toContainText('Could not load activity');
 	state.activity = async () => reply([]);
 	await page.getByRole('button', { name: 'Try again' }).click();
-	await expect(page.getByRole('status')).toContainText('No activity yet');
+	await expect(page.getByRole('region', { name: 'Activity', exact: true }).getByRole('status')).toContainText('No activity yet');
 	await page.getByLabel('Activity type').selectOption('TASK_MOVED');
-	await expect(page.getByRole('status')).toContainText('No activity matches this filter');
+	await expect(page.getByRole('region', { name: 'Activity', exact: true }).getByRole('status')).toContainText('No activity matches this filter');
 });
 
 test('preserves loaded rows and the same cursor when an older page fails and is retried', async ({ page }) => {
@@ -196,7 +202,7 @@ test('ignores a delayed initial page after changing the filter', async ({ page }
 	state.activity = async url => url.searchParams.has('action')
 		? reply([event('TASK_DELETED', { title: 'Filtered result', status: 'done' })]) : delayed.promise;
 	await openActivity(page);
-	await expect(page.getByRole('status')).toContainText('Loading activity');
+	await expect(page.getByRole('region', { name: 'Activity', exact: true }).getByRole('status')).toContainText('Loading activity');
 	await expect.poll(() => state.requests.length).toBe(1);
 	await page.getByLabel('Activity type').selectOption('TASK_DELETED');
 	await expect(items(page)).toContainText(['Filtered result']);
@@ -229,7 +235,7 @@ test('loads new board mutations on entry and keeps unfinished task input when sw
 	await page.getByRole('button', { name: '+ Add task' }).click();
 	await page.getByPlaceholder('Task title').fill('New task');
 	await openActivity(page);
-	await expect(page.getByRole('status')).toContainText('No activity yet');
+	await expect(page.getByRole('region', { name: 'Activity', exact: true }).getByRole('status')).toContainText('No activity yet');
 	await page.getByRole('button', { name: 'Board', exact: true }).click();
 	await expect(page.getByPlaceholder('Task title')).toHaveValue('New task');
 	await page.getByRole('button', { name: 'Create task', exact: true }).click();
@@ -244,7 +250,7 @@ test('refreshes an open filtered feed after adding a member and updates the memb
 	state.activity = async () => reply(added ? [event('MEMBER_ADDED', { member: { id: 4, name: 'Bob' }, role: 'editor' })] : []);
 	await openActivity(page);
 	await page.getByLabel('Activity type').selectOption('MEMBER_ADDED');
-	await expect(page.getByRole('status')).toContainText('No activity matches');
+	await expect(page.getByRole('region', { name: 'Activity', exact: true }).getByRole('status')).toContainText('No activity matches');
 	await page.getByRole('button', { name: '+ Add', exact: true }).click();
 	await page.getByPlaceholder('Search by name or email…').fill('Bob');
 	await page.getByText('Bob', { exact: true }).click();

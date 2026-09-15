@@ -33,6 +33,10 @@ collabflow/
    [database migrations](backend/migrations/README.md)
 4. Run `npm install` inside `backend/`
 5. Run `npm run dev` to start development server
+6. In `frontend/`, copy `.env.example` to `.env.local`, run `npm install`, and
+   start the UI with `npm run dev -- --port 3001`. Its origin must match the
+   backend's `FRONTEND_URL`. Set `NEXT_PUBLIC_API_URL` before building; both HTTP
+   requests and WebSockets use it.
 
 ## Environment Variables
 ```
@@ -61,23 +65,29 @@ npm --prefix backend test -- --runInBand
 
 See [backend/TESTING.md](backend/TESTING.md) for isolation safeguards, focused test
 commands and coverage limits. GitHub Actions runs backend tests and builds, plus
-frontend API-client tests, lint, and Chromium tests of the production build on
-pushes and pull requests. See [frontend/TESTING.md](frontend/TESTING.md) for browser
+frontend unit tests, lint, controlled Chromium tests, and a real two-browser
+collaboration test against PostgreSQL on pushes and pull requests. See
+[frontend/TESTING.md](frontend/TESTING.md) for browser
 setup and coverage.
 
 ## Project Activity
 
 Open **Activity** beside the project board to see task, membership, role, and
 project changes with actor names, timestamps, and before/after values. All project
-roles can read history. Filter by event type, load older events, or refresh for
-new changes. History survives task deletion and member removal; project deletion
+roles can read history. Filter by event type or load older events. The newest page
+updates automatically; while browsing older pages, use **Show latest activity**
+to see new changes without losing your place. History survives task deletion and member removal; project deletion
 removes its history. See [the activity contract](backend/ACTIVITY.md) for the API,
 transaction guarantees, and retention rules.
 
 The backend also exposes authenticated WebSocket project subscriptions at
 `/projects/:projectId/events`. Committed mutations notify subscribers across API
 instances through PostgreSQL; session and membership checks guard delivery.
-Browser integration is the next checkpoint. See [the WebSocket contract](backend/REALTIME.md)
+The browser synchronizes tasks, project details, membership, and activity, restores
+sessions before reconnecting, and refetches after joining the room. Pending task
+writes are reconciled with fresh server state, and unfinished forms survive remote
+updates. A connection indicator shows recovery; loss of access clears the view.
+See [the WebSocket contract](backend/REALTIME.md)
 for connection rules, failure recovery, and the limits of notification delivery.
 
 ## API Endpoints
@@ -147,8 +157,6 @@ for connection rules, failure recovery, and the limits of notification delivery.
 
 ## Planned Improvements
 
-- **Real-time browser updates** — connect the board and Activity view to the implemented
-  WebSocket transport, with reconnect handling and optimistic-state reconciliation
 - **Comment system** — faculty guides need a way to leave feedback on tasks or milestones beyond
   read-only access; a `task_comments` table with role-gated write access covers this
 - **College email verification** — domain-based access control (e.g. only `@university.edu`

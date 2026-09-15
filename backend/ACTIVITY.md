@@ -13,9 +13,10 @@ and removed members remain readable using the event snapshots.
 
 The feed loads 20 events at a time, supports filtering by event type, and offers
 **Load older activity** and **Refresh**. Entering Activity reads the newest page;
-returning to Board preserves unfinished task input. Adding a member refreshes an
-open feed. Updates by other users appear when you refresh or reopen Activity;
-live updates are planned for the WebSocket milestone.
+returning to Board preserves unfinished task input. Committed local and remote
+changes refresh the newest page through [project WebSockets](REALTIME.md). After
+loading older history, changes show a **Show latest activity** button instead of
+discarding the loaded pages. The selected filter stays in place.
 
 Changing the filter, project, or refresh generation resets pagination and ignores
 late responses from earlier requests. Failed older-page requests preserve loaded

@@ -118,7 +118,12 @@ to authenticated WebSocket project rooms after commit. Before delivery, it batch
 session and membership checks for each room. Logout/replay revocation closes the
 affected session's sockets; heartbeat checks and token-expiry timers cover idle
 connections. Listener failure disconnects consumers and reconnects with backoff.
-The browser integration is the next checkpoint. See [the WebSocket protocol](REALTIME.md)
+The browser coalesces hints into authorized HTTP reads and fetches again after
+joining or reconnecting. Reads invalidated by newer hints or local writes are
+discarded; snapshots wait for pending mutations, then reconcile on success or
+failure. A per-task lock prevents overlapping assignment/movement writes. The
+Activity feed refreshes its newest page and preserves older pages behind a notice.
+See [the WebSocket protocol](REALTIME.md)
 for delivery guarantees, resource limits, and deployment requirements.
 
 **1. ON DELETE CASCADE for project-related data**

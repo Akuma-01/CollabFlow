@@ -176,3 +176,21 @@ test('retries a mutation once with the original method, JSON body, and headers',
 	assert.equal(attempts[1].options?.body, JSON.stringify({ title: 'Updated' }));
 	assert.deepEqual(attempts[1].options?.headers, { 'Content-Type': 'application/json' });
 });
+
+test('aborting a read during refresh does not cancel shared rotation or retry the disposed read', async () => {
+	const server = sessionServer(), started = deferred<void>(), release = deferred<void>();
+	const client = createApiClient(BASE_URL, async (input, options) => {
+		if (String(input).endsWith('/auth/refresh')) { started.resolve(); await release.promise; }
+		return server.fetcher(input, options);
+	});
+	const controller = new AbortController();
+	const disposed = client.get('/disposed', controller.signal);
+	const other = client.get('/other');
+	await started.promise;
+	const rejected = assert.rejects(disposed, error => error instanceof Error && error.name === 'AbortError');
+	controller.abort(); await rejected;
+	release.resolve(); await other;
+	assert.equal(server.calls.filter(call => call.path === '/disposed').length, 1);
+	assert.equal(server.calls.filter(call => call.path === '/auth/refresh').length, 1);
+	assert.equal(server.calls.find(call => call.path === '/disposed')?.options?.signal, controller.signal);
+});

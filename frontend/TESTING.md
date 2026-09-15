@@ -28,7 +28,9 @@ development outside the test runner.
 ## Coverage
 
 - API-client tests cover refresh coordination, retries, logout ordering, failures,
-  and preservation of mutation bodies and cookies.
+  preservation of mutation bodies and cookies, and cancellation during shared refresh.
+- Synchronization unit tests cover subscription gaps, burst coalescing, invalidated
+  reads, concurrent mutation reconciliation, reconnects, revocation, and cleanup.
 - Activity browser tests cover every project role, all event formats, saved names
   after deletion, expandable changes, and rendering text without interpreting HTML.
 - Pagination uses the exact string cursor and current filter. Tests verify retries
@@ -37,6 +39,10 @@ development outside the test runner.
 - Opening Activity after board changes reads fresh history. Switching views keeps
   unfinished task input. Member additions refresh an open feed and update counts.
 - A narrow viewport and keyboard navigation check the new view's basic usability.
+- Real-time browser tests control WebSocket messages and HTTP timing to verify
+  remote board/team/title/history updates, draft preservation, role downgrades,
+  optimistic drag success/rollback, session restoration, missed changes, access
+  loss, retry behavior, and preservation of older Activity pages.
 
 Run a focused browser test:
 
@@ -46,9 +52,33 @@ npm --prefix frontend run test:e2e -- --grep 'delayed'
 
 Failure screenshots and traces are saved under `frontend/test-results/` (ignored
 by Git). Open a trace with `npx playwright show-trace <trace.zip>` from `frontend`.
-CI runs lint, API-client tests, and this production-build browser suite. Full
-browser workflows against a live API and Firefox/WebKit coverage remain separate
-work; the controlled responses do not test server authorization.
+CI runs lint, unit tests, both browser suites, and their production builds.
+Firefox/WebKit coverage remains future work.
+
+## Live collaboration suite
+
+```sh
+docker compose -f compose.test.yml up -d --wait
+npm --prefix backend ci
+npm --prefix frontend run test:e2e:live
+docker compose -f compose.test.yml stop
+```
+
+Run from the repository root after installing frontend dependencies and Chromium.
+The live suite builds and starts the API on `127.0.0.1:4319`, builds and starts
+Next.js on `127.0.0.1:3100`, and opens two independent browser sessions. Both ports
+must be free. No HTTP or WebSocket messages are mocked. It verifies task creation,
+movement, assignment, remote history/title changes, role downgrade, membership
+removal, and logout revocation, while preserving unfinished input.
+
+The API harness reuses the backend's disposable-database setup and numbered
+migrations. Only `TEST_DB_*` settings select the PostgreSQL test server; normal
+application credentials are ignored. The runner gracefully shuts down both
+servers and drops its generated database even after an assertion failure. A hard
+kill can leave a test database behind; stopping/removing the disposable Docker
+server clears its temporary storage. CI provides a PostgreSQL 16 service and runs
+this suite after the controlled browser tests. Rebuild normally afterward to
+restore the intended API URL as described above.
 
 ## Dependency maintenance
 

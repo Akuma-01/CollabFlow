@@ -46,11 +46,27 @@ export function createApiClient(
 		return refreshPromise;
 	}
 
-	async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+	function waitForRefresh(signal?: AbortSignal): Promise<void> {
+		if (!signal) return refreshSession();
+		signal.throwIfAborted();
+		// Cancelling a page read must not cancel another tab/request's cookie
+		// rotation, but that read must still settle promptly when it is disposed.
+		return new Promise((resolve, reject) => {
+			const abort = () => { signal.removeEventListener('abort', abort); reject(signal.reason); };
+			signal.addEventListener('abort', abort, { once: true });
+			refreshSession().then(
+				() => { signal.removeEventListener('abort', abort); resolve(); },
+				error => { signal.removeEventListener('abort', abort); reject(error); },
+			);
+		});
+	}
+
+	async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
 		const send = () => fetcher(`${baseUrl}${path}`, {
 			method,
 			credentials: 'include',
 			cache: 'no-store',
+			...(signal ? { signal } : {}),
 			...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
 		});
 		// Login/logout must not race a refresh response that changes shared cookies.
@@ -60,14 +76,16 @@ export function createApiClient(
 		const res = await send();
 		// /auth/me is used by pages to restore a browser session on load.
 		if (res.status === 401 && (!path.startsWith('/auth/') || path === '/auth/me')) {
-			await refreshSession();
+			signal?.throwIfAborted();
+			await waitForRefresh(signal);
+			signal?.throwIfAborted();
 			return decode<T>(await send()); // Retry the original request at most once.
 		}
 		return decode<T>(res);
 	}
 
 	return {
-		get: <T>(path: string) => request<T>('GET', path),
+		get: <T>(path: string, signal?: AbortSignal) => request<T>('GET', path, undefined, signal),
 		post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
 		patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
 		delete: <T>(path: string) => request<T>('DELETE', path),
