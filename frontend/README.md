@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CollabFlow frontend
 
-## Getting Started
+Next.js and React provide the project dashboard, task board, member list and
+additions, and paginated Activity view. The shared API client coordinates session
+refresh; the project synchronization coordinator uses authenticated WebSockets
+and HTTP refetches to keep open projects current.
 
-First, run the development server:
+## Local development
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+From this directory:
+
+```sh
+cp .env.example .env.local
+npm ci
+npm run dev -- --port 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `NEXT_PUBLIC_API_URL=http://localhost:3000` in `.env.local`. Start the API using
+the [repository setup](../README.md#setup), with
+`FRONTEND_URL=http://localhost:3001`, then open `http://localhost:3001`. Use the
+same hostname consistently so browser origins and cookie behavior match.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`NEXT_PUBLIC_API_URL` selects both HTTP and WebSocket endpoints. It is embedded
+in a production build, so set the intended value before `npm run build`. Hosting
+on Vercel and the corresponding Render settings are in the
+[deployment guide](../backend/DEPLOYMENT.md#hosting-configuration).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verification and code map
 
-## Learn More
+Run `npm test` for API-client and synchronization unit tests and `npm run lint`
+for lint checks. [TESTING.md](TESTING.md) describes the controlled Chromium suite,
+the real two-browser collaboration suite, and their build requirements.
 
-To learn more about Next.js, take a look at the following resources:
+- [API client](lib/api.ts): authenticated requests, refresh coordination, and logout.
+- [Synchronization coordinator](lib/project-sync.ts): subscriptions, refetching,
+  pending-write reconciliation, and reconnects.
+- [Project view](app/projects/[projectId]/ProjectClient.tsx): board, task forms,
+  permissions, member list, and member additions.
+- [Activity view](app/projects/[projectId]/ActivityPanel.tsx): event rendering,
+  filters, pagination, and remote-change notices.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See the [engineering walkthrough](../ENGINEERING.md) for implementation evidence
+and a demo sequence.

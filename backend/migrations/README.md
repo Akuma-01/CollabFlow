@@ -4,6 +4,28 @@
 numbered SQL files in this directory in filename order after loading that baseline
 on a new database. Existing databases only need the new migration files.
 
+## Existing Supabase database
+
+Open the SQL Editor in the **same Supabase project used by Render**. Run the full
+contents of [001_auth_sessions.sql](001_auth_sessions.sql), then
+[002_activity_logs.sql](002_activity_logs.sql), checking that each succeeds.
+These migrations preserve existing users, projects, memberships, and tasks. Do
+not reload the baseline `schema.sql` onto the existing database.
+
+This read-only query confirms that both tables exist; a `NULL` result means that
+table is still missing:
+
+```sql
+SELECT to_regclass('public.auth_sessions') AS auth_sessions,
+       to_regclass('public.activity_logs') AS activity_logs;
+```
+
+Retry the Render deployment after both migrations succeed. API startup checks
+required columns and the notification listener before accepting requests.
+The session migration requires existing users to sign in again; see below.
+
+## Applying migrations with psql
+
 Apply any unapplied migrations **before** starting the new API:
 
 ```sh

@@ -84,6 +84,27 @@ channels before accepting HTTP traffic. Invalid configuration, missing migration
 database connection failures, and occupied ports result in a nonzero exit. An
 occupied port also closes the already-started notification connection.
 
+Startup errors identify the failing stage (`database`, `realtime`, or `http`)
+and a recognized error code, followed by corrective guidance. For example:
+
+```text
+API startup failed [database/42P01]: Required database tables or columns are missing. Apply migrations 001 and 002 to the configured database and check its schema/search_path.
+```
+
+| Code | Check |
+| --- | --- |
+| `42P01`, `42703` | Apply missing migrations to the database the API actually uses; confirm the schema/search path. |
+| `SELF_SIGNED_CERT_IN_CHAIN` and other certificate codes | Verify the endpoint's certificate chain and configure its CA file when needed. |
+| `28P01`, `28000` | Check database credentials, the pooler username, and URL password encoding. |
+| `ENETUNREACH`, `ENOTFOUND`, connection timeouts | Check reachability/DNS and direct versus session-pooler settings. |
+| `53300` | Check database connection capacity, including the dedicated notification listener. |
+| `EADDRINUSE` | Ensure only one process binds the configured HTTP port. |
+| `UNKNOWN` | Use the reported stage to investigate provider settings and logs. |
+
+Diagnostics use recognized codes and fixed messages. They do not print raw driver
+errors, connection URLs, queries, certificate details, or original error stacks.
+The missing-schema codes follow [PostgreSQL SQLSTATE definitions](https://www.postgresql.org/docs/16/errcodes-appendix.html).
+
 | Endpoint | Purpose | Response |
 | --- | --- | --- |
 | `GET /health/live` | Process can answer HTTP. No database query. | `200 {"status":"ok"}` |
@@ -239,6 +260,18 @@ browser flows, production database TLS, and WebSocket collaboration still need
 verification after the release. No hosted settings or data were changed by these
 checks.
 
+On **2026-09-16**, the login page again returned 200 and both API health endpoints
+still returned 404. Commit `ac75e81` is pushed to `main`; both jobs in
+[CI run 34996076969](https://github.com/Akuma-01/CollabFlow/actions/runs/34996076969)
+passed, including the startup smoke check and live two-browser suite. The public
+API does not yet expose this commit's health routes. Render logs subsequently
+confirmed that this commit built successfully but exited during runtime startup.
+The owner confirmed that migrations 001 and 002 had not been applied. Apply them
+to the same Supabase project used by Render, then retry the deployment. The old
+generic error does not rule out an additional TLS or connection-mode problem;
+stage-specific diagnostics make a subsequent failure actionable. Hosted
+deployment verification remains open.
+
 ## Verification available in this repository
 
 ```sh
@@ -252,7 +285,8 @@ docker compose -f compose.test.yml stop
 `test:startup` builds the API and starts the real compiled entry point with
 `NODE_ENV=production` against a fresh disposable test database. It verifies a
 chosen `PORT`, readiness, production cookie flags, authenticated WebSockets,
-SIGTERM cleanup, and rejection of invalid configuration. The live browser suite
+SIGTERM cleanup, safe missing-migration diagnostics, and rejection of invalid
+configuration. The live browser suite
 also uses the deployed startup path and waits for readiness. Both run in CI.
 
 These checks use local HTTP and plaintext test PostgreSQL. They do not validate a

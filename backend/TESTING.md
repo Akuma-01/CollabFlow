@@ -56,7 +56,11 @@ current totals; see [frontend verification](../frontend/TESTING.md).
 - Runtime: environment/port/origin/proxy/TLS validation, source/compiled `.env`
   loading, readiness, missing migrations, occupied-port cleanup, real listener
   recovery, idle pool connection loss, and shutdown with an active HTTP response
-  and authenticated WebSocket. Readiness errors do not expose database details.
+  and authenticated WebSocket. Startup diagnostics distinguish database validation,
+  listener subscription, and HTTP bind failures, with recognized codes and fixed
+  guidance. Raw errors and connection details are not logged; tests cover TLS,
+  wrapped network errors, timeouts, and unknown/cyclic error objects. Readiness
+  errors do not expose database details.
 
 - Authentication: password hashing, duplicate and concurrent registration,
   validation, cookie flags and token lifetimes, cookies/Bearer access,
@@ -110,7 +114,8 @@ No application or deployment secrets are needed.
 `npm run test:startup` also builds and runs the compiled entry point in production
 mode with generated secrets and its own disposable database. It verifies the
 configured port, readiness, production cookie flags, WebSocket authentication,
-SIGTERM cleanup, and startup rejection for invalid configuration. Its native HTTP
+SIGTERM cleanup, safe missing-migration errors, and startup rejection for invalid
+configuration. Its native HTTP
 client checks cookie attributes; actual HTTPS/browser deployment checks are
 described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -127,7 +132,8 @@ npm --prefix frontend run build
 ```
 
 Authentication rate limiting is disabled in the integration environment and is
-not covered by this suite. WebSocket browser integration and comments need tests
-when implemented. The transport's contract and limits are in [REALTIME.md](REALTIME.md).
+not covered by this suite. WebSocket browser integration is covered by the
+[frontend suites](../frontend/TESTING.md); comments are not implemented.
+The transport's contract and limits are in [REALTIME.md](REALTIME.md).
 Apply the [database migrations](migrations/README.md)
 before starting this version on an existing database.

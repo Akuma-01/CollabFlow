@@ -6,6 +6,7 @@ import WebSocket from 'ws';
 import pool from '../config/db';
 import { createApp } from '../server';
 import { startHttpServer } from '../runtime/server';
+import { NotificationListener } from '../realtime/listener';
 import { createProject, createUser, useTestDatabase } from '../test/helpers';
 
 useTestDatabase();
@@ -41,7 +42,7 @@ describe('API startup, readiness, and shutdown', () => {
 	it('fails before listening when a required migration is absent', async () => {
 		await pool.query('ALTER TABLE activity_logs RENAME TO activity_logs_runtime_fixture');
 		try {
-			await expect(start()).rejects.toMatchObject({ code: '42P01' });
+			await expect(start()).rejects.toMatchObject({ stage: 'database', code: '42P01', message: expect.stringContaining('migrations 001 and 002') });
 			expect(await listeners()).toHaveLength(0);
 		} finally { await pool.query('ALTER TABLE activity_logs_runtime_fixture RENAME TO activity_logs'); }
 	});
@@ -51,7 +52,7 @@ describe('API startup, readiness, and shutdown', () => {
 		await new Promise<void>(resolve => blocker.listen(0, '127.0.0.1', resolve));
 		try {
 			await expect(startHttpServer(createApp(), { port: (blocker.address() as AddressInfo).port, host: '127.0.0.1' }))
-				.rejects.toMatchObject({ code: 'EADDRINUSE' });
+				.rejects.toMatchObject({ stage: 'http', code: 'EADDRINUSE' });
 			await until(async () => (await listeners()).length === 0);
 		} finally { await new Promise<void>(resolve => blocker.close(() => resolve())); }
 	});
@@ -64,6 +65,14 @@ describe('API startup, readiness, and shutdown', () => {
 		await request(runtime!.server).get('/health/live').expect(200);
 		await until(async () => (await request(runtime!.server).get('/health/ready')).status === 200);
 		expect((await listeners())[0].pid).not.toBe(listener.pid);
+	});
+
+	it('identifies a listener startup failure separately from database validation', async () => {
+		jest.spyOn(NotificationListener.prototype, 'start').mockRejectedValueOnce(
+			Object.assign(new Error('private connection details'), { code: '53300' }),
+		);
+		await expect(start()).rejects.toMatchObject({ stage: 'realtime', code: '53300' });
+		expect(await listeners()).toHaveLength(0);
 	});
 
 	it('survives a failed idle pool connection and serves another probe', async () => {

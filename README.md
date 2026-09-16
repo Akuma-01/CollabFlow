@@ -2,6 +2,26 @@
 
 A full-stack academic project collaboration platform for college student teams and faculty mentors. Students can create project workspaces, divide tasks among team members, and track progress. Faculty guides can monitor contributions and review milestones.
 
+[Hosted frontend](https://collabflow-wine.vercel.app/login) ·
+[CI](https://github.com/Akuma-01/CollabFlow/actions/workflows/ci.yml) ·
+[Engineering walkthrough and demo](ENGINEERING.md) ·
+[Deployment status and setup](backend/DEPLOYMENT.md)
+
+## Engineering Highlights
+
+- Four project roles with resource-scoped authorization; queued mutations recheck
+  permissions under a PostgreSQL project-row lock.
+- Per-login refresh sessions with token rotation, replay detection, and revocation
+  that also invalidates the session's access tokens and WebSocket subscriptions.
+- Task, membership, and project changes commit with activity records and
+  notifications in one transaction; rollback tests exercise failure paths.
+- Authenticated WebSockets synchronize boards and history across browser sessions.
+  Reconnects refetch current state, and pending writes prevent stale reads from
+  replacing optimistic updates.
+- Tests use disposable PostgreSQL databases, real WebSocket clients, and two
+  independent browser sessions. CI also exercises the compiled production entry
+  point, readiness, and shutdown.
+
 ## Tech Stack
 - Next.js + React
 - Node.js + Express 5
@@ -36,10 +56,17 @@ collabflow/
     middlewares/    # Auth, role, validation, error handling
     routes/         # Route definitions
     realtime/       # Authenticated project subscriptions and PostgreSQL listener
+    runtime/        # Startup, health checks, and graceful shutdown
     schemas/        # Zod validation schemas
     services/       # Business logic and DB queries
     types/          # TypeScript interfaces and types
     server.ts       # Entry point
+  frontend/
+    app/            # Pages, project board, and activity view
+    lib/            # API client and browser synchronization
+    test/           # API-client and synchronization unit tests
+    e2e/            # Chromium tests with controlled HTTP/WebSocket responses
+    e2e-live/       # Two-browser test against the real API and PostgreSQL
 ```
 
 ## Setup
@@ -181,19 +208,16 @@ for connection rules, failure recovery, and the limits of notification delivery.
 - Refresh-token rotation uses transactional row locks; replay and logout revoke
   the current session's access and refresh tokens without ending other device logins
 
-## Planned Improvements
+## Scope and Tradeoffs
 
-- **Comment system** — faculty guides need a way to leave feedback on tasks or milestones beyond
-  read-only access; a `task_comments` table with role-gated write access covers this
-- **College email verification** — domain-based access control (e.g. only `@university.edu`
-  addresses can register) to keep workspaces institution-scoped
-- **Project cover images** — file upload for a project thumbnail; needs a storage backend
-  (S3 or equivalent) before this makes sense to implement
+Writes within a project are serialized to keep authorization and history
+consistent; separate projects can change concurrently. WebSocket notifications
+are transient refresh hints, while the Activity API stores history. Reconnecting
+clients fetch current state rather than replaying missed messages. These choices
+fit small team workspaces; no throughput or large-scale capacity claim has been
+benchmarked.
 
-## Potential Directions
-
-- **Project showcase** — a public discovery feed where teams can publish completed projects,
-  with upvoting and filtering by domain/tech stack
-- **University leaderboard** — contribution tracking across projects, ranked by institution;
-  requires careful thought about what "contribution" means fairly
-- **Public project profiles** — shareable project pages for portfolios, visible without login
+Guides currently have read-only access. Comments, invitations, email notifications,
+file uploads, and institution email verification are future product decisions.
+See the [engineering walkthrough](ENGINEERING.md) for demonstrated behavior,
+tradeoffs, and a repeatable demo.

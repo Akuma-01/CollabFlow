@@ -5,6 +5,7 @@ const { createServer } = require('node:net');
 const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const WebSocket = require('ws');
+const { Client } = require('pg');
 const setup = require('./global-setup.cjs');
 const teardown = require('./global-teardown.cjs');
 
@@ -81,11 +82,30 @@ async function stop(state) {
 		const closed = new Promise(resolve => ws.once('close', resolve));
 		await stop(running); await closed;
 		assert.deepEqual(await running.exit, { code: 0, signal: null });
+		// Reproduce a missing hosted migration through the actual production entry
+		// point, using only the disposable database selected by setup().
+		const database = new Client({
+			host: env.DB_HOST, port: Number(env.DB_PORT), user: env.DB_USER,
+			password: env.DB_PASSWORD, database: env.DB_DATABASE, ssl: false, connectionTimeoutMillis: 5000,
+		});
+		try {
+			await database.connect();
+			await database.query('ALTER TABLE activity_logs RENAME TO private_startup_fixture');
+			try {
+				running = start(env);
+				assert.deepEqual(await running.exit, { code: 1, signal: null });
+				assert.match(running.stderr, /API startup failed \[database\/42P01\]/);
+				assert.match(running.stderr, /migrations 001 and 002/);
+				for (const secret of [env.JWT_SECRET, env.JWT_REFRESH_SECRET, env.DB_DATABASE, 'private_startup_fixture']) {
+					assert.ok(!running.stderr.includes(secret), 'Startup failure exposed private details');
+				}
+			} finally { await database.query('ALTER TABLE private_startup_fixture RENAME TO activity_logs'); }
+		} finally { await database.end(); }
 		running = start({ ...env, PORT: 'invalid' });
 		assert.equal((await running.exit).code, 1);
 		assert.match(running.stderr, /PORT must be/);
 		assert.ok(!running.stderr.includes(env.JWT_SECRET));
-		console.log('Production startup smoke passed: configured port, readiness, secure cookies, WebSocket auth, SIGTERM cleanup, invalid configuration.');
+		console.log('Production startup smoke passed: configured port, readiness, secure cookies, WebSocket auth, SIGTERM cleanup, safe missing-migration diagnostics, invalid configuration.');
 	} finally {
 		ws?.terminate();
 		await stop(running);

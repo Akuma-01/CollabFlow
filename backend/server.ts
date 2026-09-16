@@ -14,6 +14,7 @@ import pool from './config/db';
 import { runtimeConfig } from './config/runtime';
 import { installHealthRoutes } from './runtime/health';
 import { startHttpServer } from './runtime/server';
+import { formatStartupFailure } from './runtime/startup-error';
 
 export function createApp() {
 	const app = express();
@@ -63,8 +64,8 @@ if (require.main === module) {
 		const stop = () => { void shutdown().catch(() => { console.error('Server shutdown failed'); process.exitCode = 1; }); };
 		process.once('SIGTERM', stop);
 		process.once('SIGINT', stop);
-	}).catch(async () => {
-		console.error('API startup failed: check PostgreSQL connectivity, required migrations, and PORT availability');
+	}).catch(async error => {
+		console.error(formatStartupFailure(error));
 		await pool.end();
 		process.exitCode = 1;
 	});

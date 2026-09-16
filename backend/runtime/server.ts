@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { runtimeConfig } from '../config/runtime';
 import { startProjectRealtime } from '../realtime/server';
 import { HealthState, verifyDatabase } from './health';
+import { StartupError } from './startup-error';
 
 export async function startHttpServer(app: Express, options: {
 	port?: number;
@@ -11,8 +12,9 @@ export async function startHttpServer(app: Express, options: {
 } = {}) {
 	const health = app.locals.health as HealthState;
 	const server = createServer(app);
-	await verifyDatabase();
-	const realtime = await startProjectRealtime(server, options.realtime);
+	await verifyDatabase().catch(error => { throw new StartupError('database', error); });
+	const realtime = await startProjectRealtime(server, options.realtime)
+		.catch(error => { throw new StartupError('realtime', error); });
 	health.shuttingDown = false;
 	health.realtimeReady = realtime.isReady;
 	try {
@@ -26,7 +28,7 @@ export async function startHttpServer(app: Express, options: {
 	} catch (error) {
 		health.shuttingDown = true;
 		await realtime.close();
-		throw error;
+		throw new StartupError('http', error);
 	}
 	let closing: Promise<void> | undefined;
 	return {
